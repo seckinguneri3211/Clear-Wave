@@ -1,15 +1,17 @@
-# Assets Klasörü
+# Assets Dosyaları
 
-Bu klasör uygulamanın medya dosyalarını içerir.
+Bu klasör uygulamada kullanılan medya dosyalarını içerir:
 
 ## Ses Dosyaları
+- **water-ejection-sound.mp3**: Ana su atma işlemi için kullanılan ses dosyası
+- **stereo-test-sound.mp3**: Stereo hoparlör testi için kullanılan ses dosyası (440Hz test tonu)
 
-Buraya su atma işlemi sırasında çalınacak ses dosyalarını koyabilirsiniz:
+## Görseller
+- **icon.png**: Ana uygulama ikonu
+- **adaptive-icon.png**: Android adaptif ikon
+- **splash-icon.png**: Splash screen ikonu
+- **favicon.png**: Web favicon
 
-- Desteklenen formatlar: .mp3, .wav, .m4a
-- Önerilen ses dosyası adı: `water-ejection-sound.mp3`
-
-## Kullan için:
-1. Ses dosyanızı bu klasöre kopyalayın
-2. Dosya adını `water-ejection-sound.mp3` olarak ayarlayın
-3. Uygulama otomatik olarak bu ses dosyasını kullanacaktır 
+## Stereo Test Sesi Eklemek İçin:
+Stereo test için `stereo-test-sound.mp3` dosyasını bu klasöre ekleyin.
+Önerilen format: MP3, 44.1kHz, Stereo 
