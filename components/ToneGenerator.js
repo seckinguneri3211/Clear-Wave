@@ -2,76 +2,61 @@ import { Audio } from 'expo-av';
 
 export class ToneGenerator {
   constructor() {
-    this.audioContext = null;
-    this.oscillator = null;
-    this.gainNode = null;
+    this.sound = null;
     this.isPlaying = false;
   }
 
   async generateTone(frequency = 165, duration = 30000, volume = 0.6) {
     try {
-      // Audio context oluştur (Web Audio API için)
-      if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
-        const AudioCtx = AudioContext || webkitAudioContext;
-        this.audioContext = new AudioCtx();
-        
-        // Oscillator oluştur
-        this.oscillator = this.audioContext.createOscillator();
-        this.gainNode = this.audioContext.createGain();
-        
-        // Bağlantıları yap
-        this.oscillator.connect(this.gainNode);
-        this.gainNode.connect(this.audioContext.destination);
-        
-        // Parametreleri ayarla
-        this.oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
-        this.oscillator.type = 'sine'; // Kulak dostu sinüs dalgası
-        this.gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
-        
-        // Ses çalmaya başla
-        this.oscillator.start(this.audioContext.currentTime);
-        
-        // Belirlenen süre sonra durdur
-        if (duration > 0) {
-          this.oscillator.stop(this.audioContext.currentTime + duration / 1000);
-        }
-        
-        this.isPlaying = true;
-        
-        // Stop event listener
-        this.oscillator.onended = () => {
-          this.isPlaying = false;
-        };
-        
-        return true;
-      } else {
-        // Fallback: Vibration API kullan (ses yerine)
-        console.log('Web Audio API not supported, using vibration fallback');
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          const pattern = [];
-          for (let i = 0; i < duration / 1000; i++) {
-            pattern.push(200, 100); // 200ms vibrate, 100ms pause
-          }
-          navigator.vibrate(pattern);
-        }
-        return false;
+      // React Native için basit bir beep sesi oluştur
+      const { sound } = await Audio.Sound.createAsync(
+        { 
+          uri: `data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmUeBDGH0fPTgjMGHZnX8tp7LQUjdcPF6eKRQAoUWazh666XVw==` 
+        },
+        { shouldPlay: false, isLooping: false }
+      );
+      
+      this.sound = sound;
+      
+      // Volume ayarla
+      await this.sound.setVolumeAsync(volume);
+      
+      // Ses çal
+      await this.sound.playAsync();
+      this.isPlaying = true;
+      
+      // Belirtilen süre sonra durdur
+      if (duration > 0) {
+        setTimeout(() => {
+          this.stop();
+        }, duration);
       }
+      
+      return true;
     } catch (error) {
       console.error('Tone generation error:', error);
+      
+      // Fallback: Sistem sesi çal
+      try {
+        await Audio.Sound.createAsync(
+          require('expo/AppLoading'), // Sistem beep sesi
+          { shouldPlay: true, isLooping: false }
+        );
+      } catch (fallbackError) {
+        console.log('Fallback sound also failed:', fallbackError);
+      }
+      
       return false;
     }
   }
 
   stop() {
     try {
-      if (this.oscillator && this.isPlaying) {
-        this.oscillator.stop();
+      if (this.sound && this.isPlaying) {
+        this.sound.stopAsync();
+        this.sound.unloadAsync();
         this.isPlaying = false;
-      }
-      
-      if (this.audioContext) {
-        this.audioContext.close();
-        this.audioContext = null;
+        this.sound = null;
       }
     } catch (error) {
       console.error('Stop tone error:', error);
@@ -80,33 +65,58 @@ export class ToneGenerator {
 
   // Frekans döngüsü (Apple Watch benzeri)
   async startFrequencyCycle(baseFreq = 165, highFreq = 2000, duration = 30000, volume = 0.6) {
-    const cycleDuration = 35000; // 30s on, 5s off
-    const onDuration = 30000;
+    console.log('Starting frequency cycle with volume:', volume);
     
+    const playTone = async (freq, dur) => {
+      try {
+        // Basit beep tonları çal
+        const { sound } = await Audio.Sound.createAsync(
+          freq > 1000 
+            ? { uri: 'https://www.soundjay.com/misc/sounds/beep-10.wav' }
+            : { uri: 'https://www.soundjay.com/misc/sounds/beep-07.wav' },
+          { shouldPlay: true, isLooping: true, volume: volume }
+        );
+        
+        this.sound = sound;
+        this.isPlaying = true;
+        
+        // Döngü süresi boyunca çal
+        setTimeout(() => {
+          this.stop();
+        }, dur);
+        
+        return true;
+      } catch (error) {
+        console.log('Frequency cycle error:', error);
+        return false;
+      }
+    };
+    
+    // Ana döngü başlat
+    const startTime = Date.now();
     const cycle = async () => {
-      if (this.isPlaying) {
-        // Base frequency çal
-        await this.generateTone(baseFreq, onDuration / 2, volume);
+      if (Date.now() - startTime < duration && this.isPlaying) {
+        // Base frequency çal (15 saniye)
+        await playTone(baseFreq, 15000);
         
-        // Kısa pause
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Kısa duraklama
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
-        // High frequency çal
-        if (this.isPlaying) {
-          await this.generateTone(highFreq, onDuration / 2, volume);
+        // High frequency çal (15 saniye) 
+        if (Date.now() - startTime < duration) {
+          await playTone(highFreq, 15000);
         }
         
-        // 5 saniye pause
+        // 5 saniye duraklama
         await new Promise(resolve => setTimeout(resolve, 5000));
         
-        // Toplam süre kontolü
+        // Devam et
         if (Date.now() - startTime < duration) {
-          cycle(); // Cycle devam et
+          cycle();
         }
       }
     };
     
-    const startTime = Date.now();
     this.isPlaying = true;
     cycle();
   }
