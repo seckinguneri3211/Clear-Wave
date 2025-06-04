@@ -51,7 +51,7 @@ export default function App() {
   ]).current;
 
   // Damla animasyonları için (daha fazla damla)
-  const dropAnimations = useRef(Array.from({ length: 20 }, () => ({
+  const dropAnimations = useRef(Array.from({ length: 25 }, () => ({
     x: new Animated.Value(-50),
     y: new Animated.Value(Math.random() * height),
     opacity: new Animated.Value(0),
@@ -189,12 +189,14 @@ export default function App() {
         stopWaterEjection();
         setIsCompleted(true);
         startConfettiAnimation();
-        // 3 saniye sonra ana sayfaya dön
+        // Ses dosyasını yeniden yükle
+        loadSound();
+        // 5 saniye sonra ana sayfaya dön (daha uzun bekle)
         setTimeout(() => {
           setCurrentScreen('main');
           setIsCompleted(false);
           startMainWaveAnimations(); // Ana sayfa animasyonlarını yeniden başlat
-        }, 3000);
+        }, 5000);
       }
     }, 100);
 
@@ -203,12 +205,14 @@ export default function App() {
         stopWaterEjection();
         setIsCompleted(true);
         startConfettiAnimation();
-        // 3 saniye sonra ana sayfaya dön
+        // Ses dosyasını yeniden yükle
+        loadSound();
+        // 5 saniye sonra ana sayfaya dön (daha uzun bekle)
         setTimeout(() => {
           setCurrentScreen('main');
           setIsCompleted(false);
           startMainWaveAnimations(); // Ana sayfa animasyonlarını yeniden başlat
-        }, 3000);
+        }, 5000);
       }
     }, 51 * 1000);
   };
@@ -220,6 +224,18 @@ export default function App() {
       // Önce assets'teki ses dosyasını dene
       if (sound.current) {
         try {
+          console.log('🎵 Ses dosyası yüklendi, çalmaya başlıyor...');
+          
+          // Ses dosyasının durumunu kontrol et
+          const status = await sound.current.getStatusAsync();
+          console.log('Ses dosyası durumu:', status);
+          
+          // Eğer zaten çalıyorsa durdur ve baştan başlat
+          if (status.isLoaded && status.isPlaying) {
+            await sound.current.stopAsync();
+            await sound.current.setPositionAsync(0);
+          }
+          
           await sound.current.setVolumeAsync(getVolumeForIntensity(intensity));
           await sound.current.playAsync();
           console.log('✅ Assets ses dosyası çalıyor!');
@@ -231,6 +247,26 @@ export default function App() {
           return true;
         } catch (assetSoundError) {
           console.log('Assets ses dosyası çalma hatası:', assetSoundError);
+        }
+      } else {
+        console.log('⚠️ Ses dosyası yüklenmemiş, yeniden yükleniyor...');
+        await loadSound();
+        
+        // Yeniden dene
+        if (sound.current) {
+          try {
+            await sound.current.setVolumeAsync(getVolumeForIntensity(intensity));
+            await sound.current.playAsync();
+            console.log('✅ Yeniden yüklenen ses dosyası çalıyor!');
+            
+            // Vibrasyon da başlat
+            const vibrationPattern = [1000, 300, 1000, 300];
+            Vibration.vibrate(vibrationPattern, true);
+            
+            return true;
+          } catch (reloadError) {
+            console.log('Yeniden yükleme hatası:', reloadError);
+          }
         }
       }
       
@@ -273,10 +309,9 @@ export default function App() {
   const stopWaterEjection = () => {
     setIsPlaying(false);
     
-    // Assets ses dosyasını durdur
+    // Assets ses dosyasını durdur ama unload etme
     if (sound.current) {
       sound.current.stopAsync().catch(console.log);
-      sound.current.unloadAsync().catch(console.log);
     }
     
     // Vibrasyon durdur
@@ -292,7 +327,6 @@ export default function App() {
 
     stopWaveAnimations();
     stopButtonAnimation();
-    stopDropAnimations();
     
     console.log('✅ Su atma işlemi durduruldu - ses ve vibrasyon kesildi');
   };
@@ -337,53 +371,78 @@ export default function App() {
   };
 
   const startDropAnimations = () => {
+    console.log('💧 Damla animasyonları başlatılıyor...', dropAnimations.length, 'damla var');
+    
     dropAnimations.forEach((drop, index) => {
+      // Basit sabit pozisyonlar
+      const fixedY = 300 + (index % 5) * 50; // 5 farklı Y seviyesi
+      const delayTime = index * 50; // Çok hızlı başlangıç
+      
+      console.log(`Damla ${index}: Y=${fixedY}, Delay=${delayTime}ms`);
+      
+      // Başlangıç pozisyonu
       drop.x.setValue(-30);
-      drop.y.setValue(Math.random() * (height - 200) + 100);
+      drop.y.setValue(fixedY);
       drop.opacity.setValue(0);
-
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay((index * 200) % 1500),
-          Animated.parallel([
-            Animated.timing(drop.x, {
-              toValue: width + 30,
-              duration: 3000,
-              useNativeDriver: true,
-            }),
-            Animated.sequence([
-              Animated.timing(drop.opacity, {
-                toValue: 0.9,
-                duration: 300,
-                useNativeDriver: true,
-              }),
-              Animated.timing(drop.opacity, {
-                toValue: 0.5,
-                duration: 2700,
-                useNativeDriver: true,
-              }),
-            ]),
-            // Yukarı aşağı sallanma hareketi
-            Animated.loop(
-              Animated.sequence([
-                Animated.timing(drop.y, {
-                  toValue: drop.y._value + 20,
-                  duration: 800,
+      
+      // Basit animasyon
+      setTimeout(() => {
+        console.log(`💧 Damla ${index} görünmeye başladı`);
+        
+        // Görünür yap
+        Animated.timing(drop.opacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }).start(() => {
+          console.log(`💧 Damla ${index} görünür oldu, harekete başlıyor`);
+          
+          // Hareket ettir
+          Animated.timing(drop.x, {
+            toValue: width + 30,
+            duration: 3000,
+            useNativeDriver: true,
+          }).start(() => {
+            console.log(`💧 Damla ${index} hareket tamamlandı`);
+            
+            // Tekrar et (sadece isPlaying true ise)
+            if (isPlaying) {
+              setTimeout(() => {
+                console.log(`💧 Damla ${index} yeniden başlıyor`);
+                drop.x.setValue(-30);
+                drop.y.setValue(300 + (index % 5) * 50);
+                
+                Animated.timing(drop.opacity, {
+                  toValue: 1,
+                  duration: 200,
                   useNativeDriver: true,
-                }),
-                Animated.timing(drop.y, {
-                  toValue: drop.y._value - 20,
-                  duration: 800,
-                  useNativeDriver: true,
-                }),
-              ]),
-              { iterations: -1 }
-            ),
-          ]),
-        ]),
-        { iterations: -1 }
-      ).start();
+                }).start(() => {
+                  Animated.timing(drop.x, {
+                    toValue: width + 30,
+                    duration: 3000,
+                    useNativeDriver: true,
+                  }).start();
+                });
+              }, 500);
+            }
+          });
+        });
+      }, delayTime);
     });
+
+    // 51 saniye sonra durdur
+    setTimeout(() => {
+      console.log('💧 51 saniye doldu, damlalar kayboluyor...');
+      dropAnimations.forEach((drop, index) => {
+        setTimeout(() => {
+          Animated.timing(drop.opacity, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: true,
+          }).start();
+        }, index * 30);
+      });
+    }, 51000);
   };
 
   const stopDropAnimations = () => {
@@ -636,7 +695,7 @@ export default function App() {
         </View>
 
         {/* Damla Animasyonları */}
-        {isPlaying && (
+        {(isPlaying || isCompleted) && (
           <View style={styles.dropsContainer}>
             {dropAnimations.map((drop, index) => (
               <Animated.Text
@@ -947,7 +1006,9 @@ const styles = StyleSheet.create({
     color: '#42adf5',
   },
   processDropEmoji: {
-    fontSize: 16,  // Su atma ekranında daha küçük damla emoji
+    fontSize: 20,  // Biraz daha büyük yapıyorum ki görünsün
+    position: 'absolute', // Mutlaka position absolute olmalı
+    zIndex: 1000, // En üstte görünsün
   },
 
   // Teknolojik bilgi kartları
