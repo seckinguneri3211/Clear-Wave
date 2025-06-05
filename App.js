@@ -31,6 +31,8 @@ export default function App() {
   const [showTerms, setShowTerms] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [firstLaunch, setFirstLaunch] = useState(true);
+  const [showPremiumModal, setShowPremiumModal] = useState(false); // Premium modal durumu
+  const [isPremiumUser, setIsPremiumUser] = useState(false); // Premium kullanıcı durumu
   
   // Ekran geçişi için animasyon değerleri
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -139,12 +141,32 @@ export default function App() {
         await loadStereoTestSound();
         await checkRecordingPermissions();
         
+        // Premium durumunu kontrol et
+        await checkPremiumStatus();
+        
         // İlk kez açılışı kontrol et - bu en son yapılmalı
         await checkFirstLaunch();
       } catch (error) {
         console.log('Initialization error:', error);
         // Hata olsa bile splash'i göster, sonra main'e geç
         setAppState('splash');
+      }
+    };
+    
+    // Premium durumunu kontrol eden fonksiyon
+    const checkPremiumStatus = async () => {
+      try {
+        const premiumStatus = await AsyncStorage.getItem('isPremiumUser');
+        if (premiumStatus === 'true') {
+          setIsPremiumUser(true);
+          console.log('Premium kullanıcı durumu: Aktif');
+        } else {
+          setIsPremiumUser(false);
+          console.log('Premium kullanıcı durumu: Ücretsiz kullanıcı');
+        }
+      } catch (error) {
+        console.log('Premium durumu kontrol edilemedi:', error);
+        setIsPremiumUser(false);
       }
     };
     
@@ -244,6 +266,14 @@ export default function App() {
   const handlePaymentContinue = () => {
     saveFirstLaunch();
     
+    // Premium durumunu true olarak ayarla
+    setIsPremiumUser(true);
+    
+    // Kullanıcı premium durumunu kaydet
+    AsyncStorage.setItem('isPremiumUser', 'true')
+      .then(() => console.log('Premium kullanıcı durumu kaydedildi'))
+      .catch(err => console.log('Premium kullanıcı durumu kaydedilemedi', err));
+    
     // Geçiş animasyonu
     Animated.timing(fadeAnim, {
       toValue: 0,
@@ -291,6 +321,27 @@ export default function App() {
       });
     } catch (error) {
       console.log('Audio setup error:', error);
+    }
+  };
+
+  // Premium modalı açmak için kullanılacak fonksiyon
+  const handlePremiumButtonPress = () => {
+    console.log('Premium butonuna tıklandı');
+    
+    // Tüm state'leri kontrol ederek modalı açmayı garantile
+    if (currentScreen === 'main' || currentScreen === 'water-process') {
+      // Herhangi bir oynatım varsa durdur
+      if (isPlaying) {
+        stopWaterEjection();
+      }
+      
+      // Modal göster
+      setTimeout(() => {
+        setShowPremiumModal(true);
+      }, 50);
+    } else {
+      // Diğer ekranlarda direkt göster
+      setShowPremiumModal(true);
     }
   };
 
@@ -385,9 +436,19 @@ export default function App() {
     setShowWarningModal(false);
     setSelectedWaterButton('center');
     setCurrentScreen('water-process');
-    setTimeout(() => {
-      startEjection();
-    }, 500);
+    
+    // Premium olmayan kullanıcılara premium ekranını göster
+    if (!isPremiumUser) {
+      setTimeout(() => {
+        console.log('Ücretsiz kullanıcı - Premium modalı gösteriliyor');
+        setShowPremiumModal(true);
+      }, 300);
+    } else {
+      // Premium kullanıcı - normal işleme devam et
+      setTimeout(() => {
+        startEjection();
+      }, 500);
+    }
   };
 
   const startEjection = async () => {
@@ -418,9 +479,16 @@ export default function App() {
         loadSound();
         // 5 saniye sonra ana sayfaya dön (daha uzun bekle)
         setTimeout(() => {
-          setCurrentScreen('main');
+          // Ekran geçişi yapmadan önce mevcut state'leri temizle
+          setIsPlaying(false);
+          setProgress(0);
           setIsCompleted(false);
-          startMainWaveAnimations(); // Ana sayfa animasyonlarını yeniden başlat
+          // Ana sayfaya geç
+          setCurrentScreen('main');
+          // Ana sayfa animasyonlarını yeniden başlat
+          setTimeout(() => {
+            startMainWaveAnimations();
+          }, 100);
         }, 5000);
       }
     }, 100);
@@ -434,9 +502,16 @@ export default function App() {
         loadSound();
         // 5 saniye sonra ana sayfaya dön (daha uzun bekle)
         setTimeout(() => {
-          setCurrentScreen('main');
+          // Ekran geçişi yapmadan önce mevcut state'leri temizle
+          setIsPlaying(false);
+          setProgress(0);
           setIsCompleted(false);
-          startMainWaveAnimations(); // Ana sayfa animasyonlarını yeniden başlat
+          // Ana sayfaya geç
+          setCurrentScreen('main');
+          // Ana sayfa animasyonlarını yeniden başlat
+          setTimeout(() => {
+            startMainWaveAnimations();
+          }, 100);
         }, 5000);
       }
     }, 51 * 1000);
@@ -1452,6 +1527,19 @@ export default function App() {
         <View style={styles.header}>
           <Text style={styles.title}>Clear Wave</Text>
           <Text style={styles.subtitle}>Profesyonel Su Atma Sistemi</Text>
+          
+          {/* Premium İkonu */}
+          <TouchableOpacity
+            style={styles.premiumButton}
+            onPress={handlePremiumButtonPress}
+            activeOpacity={0.7}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+          >
+            <View style={styles.premiumIconContainer}>
+              <Ionicons name="star-sharp" size={38} color="#FFD700" />
+              <Text style={styles.premiumText}>PRO</Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Ana Su Çıkarma Butonu */}
@@ -1568,7 +1656,7 @@ export default function App() {
           <Ionicons name="arrow-back" size={24} color="white" />
           <Text style={styles.backButtonText}>Geri</Text>
         </TouchableOpacity>
-
+        
         {/* Başlık */}
         <View style={styles.processHeader}>
           <Text style={styles.processTitle}>SU ATMA İŞLEMİ</Text>
@@ -1791,11 +1879,7 @@ export default function App() {
           {/* Ana Test Butonu - Aşağıda boş alanda */}
           <View style={styles.testButtonContainer}>
             <TouchableOpacity
-              style={[
-                styles.techTestButton,
-                isTesting && styles.techTestButtonActive,
-                testPhase === 'completed' && styles.techTestButtonCompleted
-              ]}
+              style={styles.micTestButton}
               onPress={() => {
                 console.log('🎤 Buton basıldı! Test Phase:', testPhase);
                 if (testPhase === 'ready') {
@@ -1809,26 +1893,10 @@ export default function App() {
               disabled={isTesting}
               activeOpacity={0.8}
             >
-              <View style={styles.techTestButtonContent}>
-                {testPhase === 'ready' && (
-                  <>
-                    <Text style={styles.techTestButtonIcon}>▶</Text>
-                    <Text style={styles.techTestButtonText}>BAŞLAT</Text>
-                  </>
-                )}
-                {testPhase === 'testing' && (
-                  <>
-                    <Text style={styles.techTestButtonIcon}>⏸</Text>
-                    <Text style={styles.techTestButtonText}>TEST SÜRÜYOR</Text>
-                  </>
-                )}
-                {testPhase === 'completed' && (
-                  <>
-                    <Text style={styles.techTestButtonIcon}>↻</Text>
-                    <Text style={styles.techTestButtonText}>YENİDEN TEST</Text>
-                  </>
-                )}
-              </View>
+              <Text style={styles.micTestButtonText}>
+                {testPhase === 'ready' ? 'BAŞLAT' : 
+                 testPhase === 'testing' ? 'TEST SÜRÜYOR' : 'YENİDEN TEST'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1877,8 +1945,11 @@ export default function App() {
         style={styles.gradient}
       >
         {/* Header */}
-        <View style={styles.stereoTestHeader}>
-          <Text style={styles.stereoTestTitle}>Stereo Test</Text>
+        <View style={styles.speakerTestHeader}>
+          <Text style={styles.testPageTitle}>HOPARLÖR TESTİ</Text>
+          <Text style={styles.testPageSubtitle}>
+            Stereo Ses Sistemi Analizi
+          </Text>
         </View>
 
         {/* Hoparlörler Container */}
@@ -1889,7 +1960,7 @@ export default function App() {
               {leftSpeakerActive ? 'On' : 'Off'}
             </Text>
             
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.speakerButton}
               onPress={() => toggleSpeaker('left')}
               activeOpacity={0.8}
@@ -1926,7 +1997,6 @@ export default function App() {
                 <Animated.View 
                   style={[
                     styles.speakerMain,
-                    leftSpeakerActive && styles.speakerActive,
                     {
                       transform: [{
                         scale: leftSpeakerAnimation.interpolate({
@@ -1950,7 +2020,7 @@ export default function App() {
               </View>
             </TouchableOpacity>
             
-            <Text style={styles.speakerLabel}>Left Channel</Text>
+            <Text style={styles.speakerLabel}>Sol Kanal</Text>
           </View>
 
           {/* Sağ Hoparlör */}
@@ -1996,7 +2066,6 @@ export default function App() {
                 <Animated.View 
                   style={[
                     styles.speakerMain,
-                    rightSpeakerActive && styles.speakerActive,
                     {
                       transform: [{
                         scale: rightSpeakerAnimation.interpolate({
@@ -2020,7 +2089,7 @@ export default function App() {
               </View>
             </TouchableOpacity>
             
-            <Text style={styles.speakerLabel}>Right Channel</Text>
+            <Text style={styles.speakerLabel}>Sağ Kanal</Text>
           </View>
         </View>
 
@@ -2028,7 +2097,7 @@ export default function App() {
         <View style={styles.autoTuneSection}>
           <Text style={styles.autoTuneTitle}>Auto Tune</Text>
           <Text style={styles.autoTuneDescription}>
-            Cycle of alternating playback: both, left, right
+            Sol, sağ ve çift kanal sıralı testi
           </Text>
           <TouchableOpacity 
             style={[styles.autoTuneSwitch, autoTuneEnabled && styles.autoTuneSwitchActive]}
@@ -2040,15 +2109,17 @@ export default function App() {
         </View>
 
         {/* Start Button */}
-        <TouchableOpacity 
-          style={[styles.startTestButton, isStereoTesting && styles.startTestButtonActive]}
-          onPress={startStereoTest}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.startTestButtonText}>
-            {isStereoTesting ? 'Stop' : 'Start'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.speakerButtonContainer}>
+          <TouchableOpacity 
+            style={styles.micTestButton}
+            onPress={startStereoTest}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.micTestButtonText}>
+              {isStereoTesting ? 'Durdur' : 'Başlat'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Alt Navigasyon */}
         <View style={styles.bottomNavigation}>
@@ -2138,6 +2209,37 @@ export default function App() {
             >
               <PrivacyPolicy onClose={() => setShowPrivacy(false)} />
             </Modal>
+            
+            {/* Premium Modal */}
+            <Modal
+              visible={showPremiumModal}
+              animationType="slide"
+              transparent={true}
+              onRequestClose={() => setShowPremiumModal(false)}
+            >
+              <PaymentScreen 
+                onContinue={() => {
+                  setShowPremiumModal(false);
+                  handlePaymentContinue();
+                  
+                  // Eğer su atma ekranındaysak ve premium olduysa, işlemi başlat
+                  if (currentScreen === 'water-process') {
+                    setTimeout(() => {
+                      startEjection();
+                    }, 800);
+                  }
+                }} 
+                onCancel={() => {
+                  setShowPremiumModal(false);
+                  
+                  // Eğer su atma ekranındaysak ama premium olmadıysa, ana sayfaya dön
+                  if (currentScreen === 'water-process') {
+                    setCurrentScreen('main');
+                    startMainWaveAnimations();
+                  }
+                }}
+              />
+            </Modal>
           </>
         )}
       </Animated.View>
@@ -2167,6 +2269,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 30,
     paddingBottom: 15,
+    position: 'relative', // Premium ikonu için pozisyon
   },
   title: {
     fontSize: 42,
@@ -2180,6 +2283,42 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'rgba(255,255,255,0.9)',
     marginTop: 8,
+  },
+  // Premium ikonu stilleri
+  premiumButton: {
+    position: 'absolute',
+    top: 25,
+    right: 15,
+    zIndex: 100,
+    padding: 5, // Tıklama alanını genişlet
+  },
+  premiumIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 5,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 215, 0, 0.7)',
+  },
+  premiumText: {
+    color: '#00366B',
+    fontSize: 14,
+    fontWeight: 'bold',
+    position: 'absolute',
+    textAlign: 'center',
+  },
+  premiumButtonProcess: {
+    position: 'absolute',
+    top: 25,
+    right: 15,
+    zIndex: 100,
   },
 
   // Ana buton container
@@ -2714,14 +2853,14 @@ const styles = StyleSheet.create({
   },
   
   testButtonContainer: {
-    width: '100%',
+    width: '70%',
     alignItems: 'center',
     position: 'absolute',
     bottom: 100,
-    left: 0,
-    right: 0,
+    left: '15%',
+    right: '15%',
     paddingBottom: 20,
-    justifyContent: 'center', // Yatayda ortalama için
+    justifyContent: 'center',
   },
 
   // Teknolojik info paneli - ana sayfa için
@@ -2774,6 +2913,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
     textAlign: 'center', // Metni ortala
+    width: '100%', // Tam genişlik kullan
   },
   techInfoPanelTitle: {
     fontSize: 18,
@@ -2855,7 +2995,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'white',
+    backgroundColor: '#42adf5',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -2864,20 +3004,23 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  speakerActive: {
+    // Burada herhangi bir değişiklik olmayacak, renkler hep aynı kalacak
+  },
   speakerInner: {
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: 'rgba(66, 173, 245, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(66, 173, 245, 0.5)',
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   speakerCenter: {
     width: 20,
     height: 20,
-    backgroundColor: '#42adf5',
+    backgroundColor: 'white',
     borderRadius: 10,
   },
   speakerGrille: {
@@ -2893,46 +3036,36 @@ const styles = StyleSheet.create({
   grilleTop: {
     width: 30,
     height: 2,
-    backgroundColor: 'rgba(66, 173, 245, 0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
     borderRadius: 1,
   },
   grilleBottom: {
     width: 30,
     height: 2,
-    backgroundColor: 'rgba(66, 173, 245, 0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
     borderRadius: 1,
   },
   grilleLeft: {
     position: 'absolute',
-    left: 15,
-    top: '50%',
+    left: 45,
     width: 2,
     height: 30,
-    backgroundColor: 'rgba(66, 173, 245, 0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
     borderRadius: 1,
-    marginTop: -15,
   },
   grilleRight: {
     position: 'absolute',
-    right: 15,
-    top: '50%',
+    right: 45,
     width: 2,
     height: 30,
-    backgroundColor: 'rgba(66, 173, 245, 0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
     borderRadius: 1,
-    marginTop: -15,
   },
   speakerLabel: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: 20,
-    textAlign: 'center',
-  },
-  speakerActive: {
-    backgroundColor: 'white',
-    borderColor: '#42adf5',
-    borderWidth: 3,
+    color: 'white',
+    fontSize: 14,
+    marginTop: 15,
+    opacity: 0.8,
   },
 
   // Auto Tune
@@ -2981,31 +3114,36 @@ const styles = StyleSheet.create({
     transform: [{ translateX: 30 }],
   },
 
-  // Start Test Button
-  startTestButton: {
-    backgroundColor: 'white',
-    paddingHorizontal: 60,
-    paddingVertical: 18,
-    borderRadius: 25,
+  // Hoparlör test butonu konteynırı
+  speakerButtonContainer: {
+    width: '70%',
+    alignItems: 'center',
     marginBottom: 60,
-    marginHorizontal: 40,
+    alignSelf: 'center',
+  },
+
+  // Mikrofon Test Butonu - Özel stil
+  micTestButton: {
+    backgroundColor: 'white',
+    width: '100%',
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
-  startTestButtonActive: {
-    backgroundColor: '#E74C3C',
-  },
-  startTestButtonText: {
+  
+  micTestButtonText: {
     color: '#42adf5',
     fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
-    letterSpacing: 1,
   },
-
+  
   // Tone
   tone: {
     flex: 1,
