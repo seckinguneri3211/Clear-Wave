@@ -15,11 +15,27 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ToneGenerator from './components/ToneGenerator';
+import SplashScreen from './components/SplashScreen';
+import Onboarding from './components/Onboarding';
+import PaymentScreen from './components/PaymentScreen';
+import TermsOfUse from './components/TermsOfUse';
+import PrivacyPolicy from './components/PrivacyPolicy';
 
 const { width, height } = Dimensions.get('window');
 
 export default function App() {
+  // App durumu
+  const [appState, setAppState] = useState('splash'); // 'splash', 'onboarding', 'payment', 'main'
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [firstLaunch, setFirstLaunch] = useState(true);
+  
+  // Ekran geçişi için animasyon değerleri
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  
+  // Orijinal ana uygulama state'leri
   const [currentScreen, setCurrentScreen] = useState('main');
   const [isPlaying, setIsPlaying] = useState(false);
   const [frequency, setFrequency] = useState(165);
@@ -114,11 +130,26 @@ export default function App() {
   ]).current;
 
   useEffect(() => {
-    setupAudio();
-    startMainWaveAnimations();
-    loadSound();
-    loadStereoTestSound(); // Stereo test sesini yükle
-    checkRecordingPermissions();
+    // Sırayla işlemleri yap
+    const initialize = async () => {
+      try {
+        await setupAudio();
+        startMainWaveAnimations();
+        await loadSound();
+        await loadStereoTestSound();
+        await checkRecordingPermissions();
+        
+        // İlk kez açılışı kontrol et - bu en son yapılmalı
+        await checkFirstLaunch();
+      } catch (error) {
+        console.log('Initialization error:', error);
+        // Hata olsa bile splash'i göster, sonra main'e geç
+        setAppState('splash');
+      }
+    };
+    
+    initialize();
+    
     return () => {
       if (progressTimer.current) {
         clearInterval(progressTimer.current);
@@ -134,14 +165,127 @@ export default function App() {
     };
   }, []);
 
+  // İlk kez açılışı kontrol et
+  const checkFirstLaunch = async () => {
+    try {
+      // Basit bir flag kullan
+      setAppState('splash'); // Her zaman splash ile başla
+      const value = await AsyncStorage.getItem('firstLaunchDone');
+      
+      if (value === null) {
+        // İlk kez açılıyor
+        setFirstLaunch(true);
+      } else {
+        // Daha önce açılmış
+        setFirstLaunch(false);
+      }
+    } catch (error) {
+      console.log('First launch check error:', error);
+      // Hata durumunda varsayılan olarak ilk açılış kabul et
+      setFirstLaunch(true);
+    }
+  };
+
+  // İlk açılışı kaydet
+  const saveFirstLaunch = async () => {
+    try {
+      await AsyncStorage.setItem('firstLaunchDone', 'true');
+    } catch (error) {
+      console.log('Save first launch error:', error);
+    }
+  };
+
+  // Splash screen'den sonra ekran geçişini pürüzsüz yap
+  const handleSplashFinish = () => {
+    // Yeni ekrana geçmeden önce hafif bir bekleme ekle, daha düzgün geçiş için
+    setTimeout(() => {
+      // Ekranı kararıp açarak geçiş yap (fade-out, fade-in)
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true
+      }).start(() => {
+        // Geçiş tamamlanınca sonraki ekranı ayarla
+        if (firstLaunch) {
+          setAppState('onboarding');
+        } else {
+          setAppState('main');
+        }
+        
+        // Sonra tekrar görünür yap
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true
+        }).start();
+      });
+    }, 200);
+  };
+
+  // Onboarding'den sonra
+  const handleOnboardingFinish = () => {
+    // Geçiş animasyonu
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true
+    }).start(() => {
+      setAppState('payment');
+      // Sonra tekrar görünür yap
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true
+      }).start();
+    });
+  };
+
+  // Ödeme ekranından sonra
+  const handlePaymentContinue = () => {
+    saveFirstLaunch();
+    
+    // Geçiş animasyonu
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true
+    }).start(() => {
+      setAppState('main');
+      // Sonra tekrar görünür yap
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true
+      }).start();
+    });
+  };
+
+  // Ödeme ekranını kapat
+  const handlePaymentCancel = () => {
+    saveFirstLaunch();
+    
+    // Geçiş animasyonu
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true
+    }).start(() => {
+      setAppState('main');
+      // Sonra tekrar görünür yap
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true
+      }).start();
+    });
+  };
+
   const setupAudio = async () => {
     try {
       await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+        allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
         shouldDuckAndroid: true,
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
         playThroughEarpieceAndroid: false,
         staysActiveInBackground: false,
       });
@@ -164,9 +308,11 @@ export default function App() {
       );
       sound.current = newSound;
       console.log('✅ Su atma sesi başarıyla yüklendi!');
+      return true;
     } catch (error) {
       console.log('Assets ses dosyası yüklenemedi:', error);
       sound.current = null;
+      return false;
     }
   };
 
@@ -174,9 +320,9 @@ export default function App() {
   const loadStereoTestSound = async () => {
     try {
       console.log('Loading stereo test sound from assets...');
-      // Dinamik require ile dosya varlığını kontrol et
+      // Doğrudan require ile yükle
       const { sound: newStereoSound } = await Audio.Sound.createAsync(
-        { uri: 'asset:/stereo-test-sound.mp3' }, // Asset URI ile daha esnek yaklaşım
+        require('./assets/stereo-test-sound.mp3'),
         { 
           shouldPlay: false, 
           isLooping: false,
@@ -185,36 +331,26 @@ export default function App() {
       );
       stereoTestSound.current = newStereoSound;
       console.log('✅ Stereo test sesi başarıyla yüklendi!');
+      return true;
     } catch (error) {
-      console.log('Stereo test ses dosyası bulunamadı, ton generator kullanılacak');
-      
-      // Alternatif olarak require ile dene
-      try {
-        const { sound: newStereoSound } = await Audio.Sound.createAsync(
-          require('./assets/stereo-test-sound.mp3'),
-          { 
-            shouldPlay: false, 
-            isLooping: false,
-            volume: 0.8
-          }
-        );
-        stereoTestSound.current = newStereoSound;
-        console.log('✅ Stereo test sesi (require) başarıyla yüklendi!');
-      } catch (requireError) {
-        console.log('Stereo test ses dosyası yüklenemedi, ton generator kullanılacak');
-        stereoTestSound.current = null;
-      }
+      console.log('Stereo test ses dosyası yüklenemedi:', error);
+      stereoTestSound.current = null;
+      return false;
     }
   };
 
   const unloadSound = async () => {
-    if (sound.current) {
-      try {
+    try {
+      if (sound.current) {
         await sound.current.unloadAsync();
         sound.current = null;
-      } catch (error) {
-        console.log('Sound unload error:', error);
       }
+      if (stereoTestSound.current) {
+        await stereoTestSound.current.unloadAsync();
+        stereoTestSound.current = null;
+      }
+    } catch (error) {
+      console.log('Ses dosyası kaldırma hatası:', error);
     }
   };
 
@@ -1956,15 +2092,63 @@ export default function App() {
     </View>
   );
 
-  // Ana render fonksiyonu
+  // Ana uygulamayı render et
+  const renderApp = () => {
+    return (
+      <Animated.View style={{ flex: 1, opacity: fadeAnim, backgroundColor: '#001733' }}>
+        {appState === 'splash' && (
+          <SplashScreen onFinish={handleSplashFinish} />
+        )}
+        
+        {appState === 'onboarding' && (
+          <Onboarding onDone={handleOnboardingFinish} />
+        )}
+        
+        {appState === 'payment' && (
+          <PaymentScreen 
+            onContinue={handlePaymentContinue} 
+            onCancel={handlePaymentCancel}
+          />
+        )}
+        
+        {appState === 'main' && (
+          <>
+            <StatusBar barStyle="light-content" />
+            {currentScreen === 'main' && renderMainScreen()}
+            {currentScreen === 'water-process' && renderWaterProcessScreen()}
+            {currentScreen === 'mic-test' && renderMicTestScreen()}
+            {currentScreen === 'speaker-test' && renderSpeakerTestScreen()}
+            {renderWarningModal()}
+            
+            {/* Terms ve Privacy modals */}
+            <Modal
+              visible={showTerms}
+              animationType="slide"
+              transparent={true}
+              onRequestClose={() => setShowTerms(false)}
+            >
+              <TermsOfUse onClose={() => setShowTerms(false)} />
+            </Modal>
+
+            <Modal
+              visible={showPrivacy}
+              animationType="slide"
+              transparent={true}
+              onRequestClose={() => setShowPrivacy(false)}
+            >
+              <PrivacyPolicy onClose={() => setShowPrivacy(false)} />
+            </Modal>
+          </>
+        )}
+      </Animated.View>
+    );
+  };
+  
+  // Ana render
   return (
-    <>
-      {currentScreen === 'main' && renderMainScreen()}
-      {currentScreen === 'water-process' && renderWaterProcessScreen()}
-      {currentScreen === 'mic-test' && renderMicTestScreen()}
-      {currentScreen === 'speaker-test' && renderSpeakerTestScreen()}
-      {renderWarningModal()}
-    </>
+    <View style={{ flex: 1, backgroundColor: '#001733' }}>
+      {renderApp()}
+    </View>
   );
 }
 
