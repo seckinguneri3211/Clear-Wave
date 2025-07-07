@@ -176,13 +176,43 @@ export default function App() {
     // Function to check premium status
     const checkPremiumStatus = async () => {
       try {
-        const premiumStatus = await AsyncStorage.getItem('isPremiumUser');
-        if (premiumStatus === 'true') {
-          setIsPremiumUser(true);
-          console.log('Premium user status: Active');
-        } else {
-          setIsPremiumUser(false);
-          console.log('Premium user status: Free user');
+        // Önce AsyncStorage'dan kontrol et
+        const localPremiumStatus = await AsyncStorage.getItem('isPremiumUser');
+        
+        // Sonra Adapty'den kontrol et
+        try {
+          const profile = await adapty.getProfile();
+          const isPremiumActive = profile.accessLevels?.premium?.isActive || false;
+          
+          console.log('Adapty Premium Status:', {
+            isActive: isPremiumActive,
+            localStatus: localPremiumStatus,
+            accessLevels: profile.accessLevels
+          });
+          
+          if (isPremiumActive) {
+            // Adapty'de premium aktifse, local storage'ı da güncelle
+            await AsyncStorage.setItem('isPremiumUser', 'true');
+            setIsPremiumUser(true);
+            console.log('Premium user status: Active (verified by Adapty)');
+          } else if (localPremiumStatus === 'true') {
+            // Adapty'de premium yok ama local'de var, bu test durumu olabilir
+            setIsPremiumUser(true);
+            console.log('Premium user status: Active (from local storage)');
+          } else {
+            setIsPremiumUser(false);
+            console.log('Premium user status: Free user');
+          }
+        } catch (adaptyError) {
+          console.log('Adapty premium status check error:', adaptyError);
+          // Adapty hatası durumunda local storage'a bak
+          if (localPremiumStatus === 'true') {
+            setIsPremiumUser(true);
+            console.log('Premium user status: Active (fallback to local)');
+          } else {
+            setIsPremiumUser(false);
+            console.log('Premium user status: Free user (fallback)');
+          }
         }
       } catch (error) {
         console.log('Premium status could not be checked:', error);
@@ -251,6 +281,7 @@ export default function App() {
         if (firstLaunch) {
           setAppState('onboarding');
         } else {
+          // Premium kullanıcı ise direkt main, değilse de main (paywall'u ihtiyaç halinde göstereceğiz)
           setAppState('main');
         }
         
@@ -272,7 +303,14 @@ export default function App() {
       duration: 300,
       useNativeDriver: true
     }).start(() => {
-      setAppState('payment');
+      // Premium kullanıcı ise direkt main ekrana geç
+      if (isPremiumUser) {
+        saveFirstLaunch();
+        setAppState('main');
+      } else {
+        // Free kullanıcı ise payment ekranına geç
+        setAppState('payment');
+      }
       // Then make it visible again
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -1600,18 +1638,29 @@ export default function App() {
           <Text style={styles.title}>Clear Wave</Text>
           <Text style={styles.subtitle}>Professional Water Ejection System</Text>
           
-          {/* Premium İkonu */}
-          <TouchableOpacity
-            style={styles.premiumButton}
-            onPress={handlePremiumButtonPress}
-            activeOpacity={0.7}
-            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
-          >
-            <View style={styles.premiumIconContainer}>
-              <Ionicons name="star-sharp" size={38} color="#FFD700" />
-              <Text style={styles.premiumText}>PRO</Text>
+          {/* Premium İkonu - Premium kullanıcılar için farklı görünüm */}
+          {!isPremiumUser && (
+            <TouchableOpacity
+              style={styles.premiumButton}
+              onPress={handlePremiumButtonPress}
+              activeOpacity={0.7}
+              hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+            >
+              <View style={styles.premiumIconContainer}>
+                <Ionicons name="star-sharp" size={38} color="#FFD700" />
+                <Text style={styles.premiumText}>PRO</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+          
+          {isPremiumUser && (
+            <View style={styles.premiumActiveContainer}>
+              <View style={styles.premiumActiveIconContainer}>
+                <Ionicons name="checkmark-circle" size={38} color="#4CAF50" />
+                <Text style={styles.premiumActiveText}>PREMIUM</Text>
+              </View>
             </View>
-          </TouchableOpacity>
+          )}
         </View>
 
         {/* Ana Su Çıkarma Butonu */}
@@ -2391,6 +2440,38 @@ const styles = StyleSheet.create({
     top: 25,
     right: 15,
     zIndex: 100,
+  },
+  
+  // Premium aktif kullanıcı stilleri
+  premiumActiveContainer: {
+    position: 'absolute',
+    top: 25,
+    right: 15,
+    zIndex: 100,
+    padding: 5,
+  },
+  premiumActiveIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 5,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(76, 175, 80, 0.7)',
+  },
+  premiumActiveText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+    position: 'absolute',
+    textAlign: 'center',
+    top: 42,
   },
 
   // Ana buton container
