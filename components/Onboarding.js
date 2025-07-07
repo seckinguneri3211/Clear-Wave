@@ -9,24 +9,24 @@ const { width, height } = Dimensions.get('window');
 const slides = [
   {
     key: 'slide1',
-    title: 'Su Problemlerini Çözün',
-    text: 'Telefonunuza su kaçtığında hoparlörünüzden suyu çıkarmak için Clear Wave kullanın',
+    title: 'Remove Water Instantly',
+    text: 'Clear Wave uses professional sound technology to eject water from your device speakers in seconds.',
     image: require('../assets/Onboarding/onboarding-1.png'),
-    backgroundColor: ['#001733', '#003166', '#001733'],
+    backgroundColor: ['#001733', '#003166'],
   },
   {
     key: 'slide2',
-    title: 'Anında Sonuç',
-    text: 'Yüksek frekanslı titreşimler ile hoparlörünüzdeki suyu hızlıca dışarı atın',
+    title: 'Safe & Effective',
+    text: 'Our method is safe for your device and proven to be effective by thousands of users.',
     image: require('../assets/Onboarding/onboarding-2.png'),
-    backgroundColor: ['#00122B', '#0A2D5C', '#00122B'],
+    backgroundColor: ['#003166', '#001733'],
   },
   {
     key: 'slide3',
-    title: 'Hoparlörünüzü Kurtarın',
-    text: 'Clear Wave ile ses kalitesini geri kazanın ve cihazınızı koruyun',
+    title: 'Get Started Now',
+    text: 'Just press Start and follow the simple instructions to clean your speakers.',
     image: require('../assets/Onboarding/onboarding-3.png'),
-    backgroundColor: ['#000D1F', '#002652', '#000D1F'],
+    backgroundColor: ['#001733', '#003166'],
   },
 ];
 
@@ -191,13 +191,14 @@ const Onboarding = ({ onDone }) => {
             style={styles.button} 
             onPress={goToNextSlide}
             activeOpacity={0.8}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <LinearGradient
               colors={['#0066CC', '#4CB5FF']}
               style={styles.buttonGradient}
             >
               <Text style={styles.buttonText}>
-                {activeIndex === slides.length - 1 ? 'Başla' : 'Devam Et'}
+                {activeIndex === slides.length - 1 ? 'Start' : 'Continue'}
               </Text>
               <Ionicons 
                 name={activeIndex === slides.length - 1 ? "checkmark" : "arrow-forward"} 
@@ -236,7 +237,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 30,
-    paddingBottom: 20,
+    paddingBottom: 40, // Daha fazla alt padding
   },
   content: {
     alignItems: 'center',
@@ -281,7 +282,8 @@ const styles = StyleSheet.create({
   buttonContainer: {
     width: width * 0.8,
     alignSelf: 'center',
-    marginBottom: 40,
+    marginBottom: 60, // Daha fazla boşluk
+    paddingBottom: 20, // Ekstra padding
   },
   button: {
     borderRadius: 12,
@@ -291,13 +293,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
+    minHeight: 60, // Minimum yükseklik
   },
   buttonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 20, // Daha fazla dikey padding
     paddingHorizontal: 40,
+    minHeight: 60, // Minimum yükseklik
   },
   buttonText: {
     fontSize: 18,

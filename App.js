@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { adapty } from 'react-native-adapty';
 import {
   StyleSheet,
   Text,
@@ -10,6 +11,7 @@ import {
   Modal,
   Vibration,
   Alert,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
@@ -23,21 +25,39 @@ import PaymentScreen from './components/PaymentScreen';
 import TermsOfUse from './components/TermsOfUse';
 import PrivacyPolicy from './components/PrivacyPolicy';
 
+adapty.activate('public_live_I8BdB1bU.lrOqMamz477qZkP2bsJ3')
+  .then(() => {
+    console.log('✅ Adapty başarıyla aktive edildi');
+    // Profil bilgisini kontrol edelim
+    return adapty.getProfile();
+  })
+  .then((profile) => {
+    console.log('📱 Adapty Profil Bilgisi:', {
+      localizedPrice: profile.accessLevels?.premium?.localizedPrice,
+      isActive: profile.accessLevels?.premium?.isActive,
+      vendorProductId: profile.accessLevels?.premium?.vendorProductId,
+      store: profile.accessLevels?.premium?.store
+    });
+  })
+  .catch((error) => {
+    console.error('❌ Adapty aktivasyon hatası:', error);
+  });
+
 const { width, height } = Dimensions.get('window');
 
 export default function App() {
-  // App durumu
+  // App state
   const [appState, setAppState] = useState('splash'); // 'splash', 'onboarding', 'payment', 'main'
   const [showTerms, setShowTerms] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [firstLaunch, setFirstLaunch] = useState(true);
-  const [showPremiumModal, setShowPremiumModal] = useState(false); // Premium modal durumu
-  const [isPremiumUser, setIsPremiumUser] = useState(false); // Premium kullanıcı durumu
+  const [showPremiumModal, setShowPremiumModal] = useState(false); // Premium modal state
+  const [isPremiumUser, setIsPremiumUser] = useState(false); // Premium user state
   
-  // Ekran geçişi için animasyon değerleri
+  // Screen transition animation values
   const fadeAnim = useRef(new Animated.Value(1)).current;
   
-  // Orijinal ana uygulama state'leri
+  // Original main app states
   const [currentScreen, setCurrentScreen] = useState('main');
   const [isPlaying, setIsPlaying] = useState(false);
   const [frequency, setFrequency] = useState(165);
@@ -73,7 +93,7 @@ export default function App() {
     new Animated.Value(0),
   ]).current;
 
-  // Ana sayfa dalga animasyonları
+  // Main page wave animations
   const mainWaveAnimations = useRef([
     new Animated.Value(0),
     new Animated.Value(0),
@@ -81,14 +101,14 @@ export default function App() {
     new Animated.Value(0),
   ]).current;
 
-  // Damla animasyonları için (daha fazla damla)
+  // Drop animations (more drops)
   const dropAnimations = useRef(Array.from({ length: 25 }, () => ({
     x: new Animated.Value(-50),
     y: new Animated.Value(Math.random() * height),
     opacity: new Animated.Value(0),
   }))).current;
 
-  // Konfeti animasyonları (gerçek konfeti parçacıkları)
+  // Confetti animations (real confetti particles)
   const confettiAnimations = useRef(Array.from({ length: 20 }, () => ({
     x: new Animated.Value(Math.random() * width),
     y: new Animated.Value(-50),
@@ -97,24 +117,24 @@ export default function App() {
     color: Math.random(),
   }))).current;
 
-  // Ses objesi
+  // Sound object
   const sound = useRef(null);
 
-  // Stereo test ses objesi
+  // Stereo test sound object
   const stereoTestSound = useRef(null);
 
-  // Mikrofon test simülasyonu state'leri
+  // Microphone test simulation states
   const [isTesting, setIsTesting] = useState(false);
   const [testDuration, setTestDuration] = useState(0);
   const [simulatedAudioLevel, setSimulatedAudioLevel] = useState(0);
   const [testPhase, setTestPhase] = useState('ready'); // ready, testing, completed
-  const [micQuality, setMicQuality] = useState(0); // 0-100 kalite skoru
+  const [micQuality, setMicQuality] = useState(0); // 0-100 quality score
   
-  // Test animasyon değerleri
+  // Test animation values
   const micTestAnimation = useRef(new Animated.Value(0)).current;
   const qualityAnimation = useRef(new Animated.Value(0)).current;
 
-  // Hoparlör test state'leri
+  // Speaker test states
   const [isStereoTesting, setIsStereoTesting] = useState(false);
   const [leftSpeakerActive, setLeftSpeakerActive] = useState(true);
   const [rightSpeakerActive, setRightSpeakerActive] = useState(true);
@@ -122,7 +142,7 @@ export default function App() {
   const [currentTestSide, setCurrentTestSide] = useState('both'); // 'left', 'right', 'both'
   const [testProgress, setTestProgress] = useState(0);
   
-  // Hoparlör animasyon değerleri
+  // Speaker animation values
   const leftSpeakerAnimation = useRef(new Animated.Value(0)).current;
   const rightSpeakerAnimation = useRef(new Animated.Value(0)).current;
   const speakerRingAnimations = useRef([
@@ -132,7 +152,7 @@ export default function App() {
   ]).current;
 
   useEffect(() => {
-    // Sırayla işlemleri yap
+    // Execute operations in sequence
     const initialize = async () => {
       try {
         await setupAudio();
@@ -141,31 +161,31 @@ export default function App() {
         await loadStereoTestSound();
         await checkRecordingPermissions();
         
-        // Premium durumunu kontrol et
+        // Check premium status
         await checkPremiumStatus();
         
-        // İlk kez açılışı kontrol et - bu en son yapılmalı
+        // Check first launch - this should be done last
         await checkFirstLaunch();
       } catch (error) {
         console.log('Initialization error:', error);
-        // Hata olsa bile splash'i göster, sonra main'e geç
+        // Even if there's an error, show splash, then go to main
         setAppState('splash');
       }
     };
     
-    // Premium durumunu kontrol eden fonksiyon
+    // Function to check premium status
     const checkPremiumStatus = async () => {
       try {
         const premiumStatus = await AsyncStorage.getItem('isPremiumUser');
         if (premiumStatus === 'true') {
           setIsPremiumUser(true);
-          console.log('Premium kullanıcı durumu: Aktif');
+          console.log('Premium user status: Active');
         } else {
           setIsPremiumUser(false);
-          console.log('Premium kullanıcı durumu: Ücretsiz kullanıcı');
+          console.log('Premium user status: Free user');
         }
       } catch (error) {
-        console.log('Premium durumu kontrol edilemedi:', error);
+        console.log('Premium status could not be checked:', error);
         setIsPremiumUser(false);
       }
     };
@@ -187,28 +207,28 @@ export default function App() {
     };
   }, []);
 
-  // İlk kez açılışı kontrol et
+  // Check first launch
   const checkFirstLaunch = async () => {
     try {
-      // Basit bir flag kullan
-      setAppState('splash'); // Her zaman splash ile başla
+      // Use a simple flag
+      setAppState('splash'); // Always start with splash
       const value = await AsyncStorage.getItem('firstLaunchDone');
       
       if (value === null) {
-        // İlk kez açılıyor
+        // First time opening
         setFirstLaunch(true);
       } else {
-        // Daha önce açılmış
+        // Opened before
         setFirstLaunch(false);
       }
     } catch (error) {
       console.log('First launch check error:', error);
-      // Hata durumunda varsayılan olarak ilk açılış kabul et
+      // In case of error, accept first launch as default
       setFirstLaunch(true);
     }
   };
 
-  // İlk açılışı kaydet
+  // Save first launch
   const saveFirstLaunch = async () => {
     try {
       await AsyncStorage.setItem('firstLaunchDone', 'true');
@@ -217,24 +237,24 @@ export default function App() {
     }
   };
 
-  // Splash screen'den sonra ekran geçişini pürüzsüz yap
+  // Make screen transition smooth after splash screen
   const handleSplashFinish = () => {
-    // Yeni ekrana geçmeden önce hafif bir bekleme ekle, daha düzgün geçiş için
+    // Add a slight delay before transitioning to new screen for smoother transition
     setTimeout(() => {
-      // Ekranı kararıp açarak geçiş yap (fade-out, fade-in)
+      // Transition by darkening and opening the screen (fade-out, fade-in)
       Animated.timing(fadeAnim, {
         toValue: 0,
         duration: 300,
         useNativeDriver: true
       }).start(() => {
-        // Geçiş tamamlanınca sonraki ekranı ayarla
+        // Set next screen when transition is complete
         if (firstLaunch) {
           setAppState('onboarding');
         } else {
           setAppState('main');
         }
         
-        // Sonra tekrar görünür yap
+        // Then make it visible again
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 300,
@@ -244,16 +264,16 @@ export default function App() {
     }, 200);
   };
 
-  // Onboarding'den sonra
+  // After onboarding
   const handleOnboardingFinish = () => {
-    // Geçiş animasyonu
+    // Transition animation
     Animated.timing(fadeAnim, {
       toValue: 0,
       duration: 300,
       useNativeDriver: true
     }).start(() => {
       setAppState('payment');
-      // Sonra tekrar görünür yap
+      // Then make it visible again
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 300,
@@ -262,49 +282,49 @@ export default function App() {
     });
   };
 
-  // Ödeme ekranından sonra
+  // After payment screen
   const handlePaymentContinue = () => {
     saveFirstLaunch();
     
-    // Premium durumunu true olarak ayarla
+    // Set premium status to true
     setIsPremiumUser(true);
     
-    // Kullanıcı premium durumunu kaydet
+    // Save user premium status
     AsyncStorage.setItem('isPremiumUser', 'true')
-      .then(() => console.log('Premium kullanıcı durumu kaydedildi'))
-      .catch(err => console.log('Premium kullanıcı durumu kaydedilemedi', err));
+      .then(() => console.log('Premium user status saved'))
+      .catch(err => console.log('Premium user status could not be saved', err));
     
-    // Geçiş animasyonu
+    // Faster transition animation
     Animated.timing(fadeAnim, {
       toValue: 0,
-      duration: 300,
+      duration: 150,
       useNativeDriver: true
     }).start(() => {
       setAppState('main');
-      // Sonra tekrar görünür yap
+      // Then make it visible again
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 300,
+        duration: 150,
         useNativeDriver: true
       }).start();
     });
   };
 
-  // Ödeme ekranını kapat
+      // Close payment screen
   const handlePaymentCancel = () => {
     saveFirstLaunch();
     
-    // Geçiş animasyonu
+    // Faster transition animation
     Animated.timing(fadeAnim, {
       toValue: 0,
-      duration: 300,
+      duration: 150,
       useNativeDriver: true
     }).start(() => {
       setAppState('main');
       // Sonra tekrar görünür yap
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 300,
+        duration: 150,
         useNativeDriver: true
       }).start();
     });
@@ -313,34 +333,35 @@ export default function App() {
   const setupAudio = async () => {
     try {
       await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
+        allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
         staysActiveInBackground: false,
       });
+      console.log('✅ Audio setup completed');
     } catch (error) {
       console.log('Audio setup error:', error);
     }
   };
 
-  // Premium modalı açmak için kullanılacak fonksiyon
+  // Function to open premium modal
   const handlePremiumButtonPress = () => {
-    console.log('Premium butonuna tıklandı');
+    console.log('Premium button clicked');
     
-    // Tüm state'leri kontrol ederek modalı açmayı garantile
+    // Ensure modal opens by checking all states
     if (currentScreen === 'main' || currentScreen === 'water-process') {
-      // Herhangi bir oynatım varsa durdur
+      // Stop any playback if exists
       if (isPlaying) {
         stopWaterEjection();
       }
       
-      // Modal göster
+      // Show modal
       setTimeout(() => {
         setShowPremiumModal(true);
       }, 50);
     } else {
-      // Diğer ekranlarda direkt göster
+      // Show directly on other screens
       setShowPremiumModal(true);
     }
   };
@@ -349,19 +370,29 @@ export default function App() {
     try {
       // Assets klasöründeki ses dosyasını yükle
       console.log('Loading water ejection sound from assets...');
+      
+      // Önce audio mode'u basit şekilde ayarla (speaker test'te çalışan ayarlar)
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+        staysActiveInBackground: false,
+      });
+      
       const { sound: newSound } = await Audio.Sound.createAsync(
         require('./assets/water-ejection-sound.mp3'),
         { 
           shouldPlay: false, 
           isLooping: true,
-          volume: 1.0 // Maksimum volume
+          volume: 1.0,
         }
       );
       sound.current = newSound;
-      console.log('✅ Su atma sesi başarıyla yüklendi!');
+      console.log('✅ Water ejection sound successfully loaded!');
       return true;
     } catch (error) {
-      console.log('Assets ses dosyası yüklenemedi:', error);
+      console.log('Assets sound file could not be loaded:', error);
       sound.current = null;
       return false;
     }
@@ -371,20 +402,30 @@ export default function App() {
   const loadStereoTestSound = async () => {
     try {
       console.log('Loading stereo test sound from assets...');
+      
+      // Önce audio mode'u basit şekilde ayarla
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+        staysActiveInBackground: false,
+      });
+      
       // Doğrudan require ile yükle
       const { sound: newStereoSound } = await Audio.Sound.createAsync(
         require('./assets/stereo-test-sound.mp3'),
         { 
           shouldPlay: false, 
           isLooping: false,
-          volume: 0.8
+          volume: 0.8,
         }
       );
       stereoTestSound.current = newStereoSound;
-      console.log('✅ Stereo test sesi başarıyla yüklendi!');
+      console.log('✅ Stereo test sound successfully loaded!');
       return true;
     } catch (error) {
-      console.log('Stereo test ses dosyası yüklenemedi:', error);
+      console.log('Stereo test sound file could not be loaded:', error);
       stereoTestSound.current = null;
       return false;
     }
@@ -401,11 +442,11 @@ export default function App() {
         stereoTestSound.current = null;
       }
     } catch (error) {
-      console.log('Ses dosyası kaldırma hatası:', error);
+      console.log('Sound file removal error:', error);
     }
   };
 
-  // Ana sayfa dalga animasyonları
+  // Main page wave animations
   const startMainWaveAnimations = () => {
     if (currentScreen === 'main') {
       mainWaveAnimations.forEach((anim, index) => {
@@ -437,14 +478,14 @@ export default function App() {
     setSelectedWaterButton('center');
     setCurrentScreen('water-process');
     
-    // Premium olmayan kullanıcılara premium ekranını göster
+    // Show premium screen to non-premium users
     if (!isPremiumUser) {
       setTimeout(() => {
-        console.log('Ücretsiz kullanıcı - Premium modalı gösteriliyor');
+        console.log('Free user - Premium modal being shown');
         setShowPremiumModal(true);
       }, 300);
     } else {
-      // Premium kullanıcı - normal işleme devam et
+      // Premium user - continue with normal process
       setTimeout(() => {
         startEjection();
       }, 500);
@@ -461,8 +502,8 @@ export default function App() {
     startButtonAnimation();
     startDropAnimations();
     
-    // Ses sistemini başlat
-    console.log('🎵 Ses sistemi başlatılıyor...');
+    // Start sound system
+    console.log('🎵 Sound system starting...');
     await playDefaultTone();
     
     const startTime = Date.now();
@@ -475,17 +516,17 @@ export default function App() {
         stopWaterEjection();
         setIsCompleted(true);
         startConfettiAnimation();
-        // Ses dosyasını yeniden yükle
+        // Reload sound file
         loadSound();
-        // 5 saniye sonra ana sayfaya dön (daha uzun bekle)
+        // Return to main page after 5 seconds (wait longer)
         setTimeout(() => {
-          // Ekran geçişi yapmadan önce mevcut state'leri temizle
+          // Clear current states before screen transition
           setIsPlaying(false);
           setProgress(0);
           setIsCompleted(false);
-          // Ana sayfaya geç
+          // Go to main page
           setCurrentScreen('main');
-          // Ana sayfa animasyonlarını yeniden başlat
+          // Restart main page animations
           setTimeout(() => {
             startMainWaveAnimations();
           }, 100);
@@ -498,17 +539,17 @@ export default function App() {
         stopWaterEjection();
         setIsCompleted(true);
         startConfettiAnimation();
-        // Ses dosyasını yeniden yükle
+        // Reload sound file
         loadSound();
-        // 5 saniye sonra ana sayfaya dön (daha uzun bekle)
+        // Return to main page after 5 seconds (wait longer)
         setTimeout(() => {
-          // Ekran geçişi yapmadan önce mevcut state'leri temizle
+          // Clear current states before screen transition
           setIsPlaying(false);
           setProgress(0);
           setIsCompleted(false);
-          // Ana sayfaya geç
+          // Go to main page
           setCurrentScreen('main');
-          // Ana sayfa animasyonlarını yeniden başlat
+          // Restart main page animations
           setTimeout(() => {
             startMainWaveAnimations();
           }, 100);
@@ -519,18 +560,27 @@ export default function App() {
 
   const playDefaultTone = async () => {
     try {
-      console.log('🔊 Ses çalınıyor...');
+      console.log('🔊 Playing sound...');
       
-      // Önce assets'teki ses dosyasını dene
+      // Audio mode'u basit şekilde ayarla (speaker test'te çalışan ayarlar)
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+        staysActiveInBackground: false,
+      });
+      
+      // First try the sound file in assets
       if (sound.current) {
         try {
-          console.log('🎵 Ses dosyası yüklendi, çalmaya başlıyor...');
+          console.log('🎵 Sound file loaded, starting playback...');
           
-          // Ses dosyasının durumunu kontrol et
+          // Check sound file status
           const status = await sound.current.getStatusAsync();
-          console.log('Ses dosyası durumu:', status);
+          console.log('Sound file status:', status);
           
-          // Eğer zaten çalıyorsa durdur ve baştan başlat
+          // If already playing, stop and restart from beginning
           if (status.isLoaded && status.isPlaying) {
             await sound.current.stopAsync();
             await sound.current.setPositionAsync(0);
@@ -538,46 +588,46 @@ export default function App() {
           
           await sound.current.setVolumeAsync(getVolumeForIntensity(intensity));
           await sound.current.playAsync();
-          console.log('✅ Assets ses dosyası çalıyor!');
+          console.log('✅ Assets sound file playing!');
           
-          // Vibrasyon da başlat
+          // Start vibration too
           const vibrationPattern = [1000, 300, 1000, 300];
           Vibration.vibrate(vibrationPattern, true);
           
           return true;
         } catch (assetSoundError) {
-          console.log('Assets ses dosyası çalma hatası:', assetSoundError);
+          console.log('Assets sound file playback error:', assetSoundError);
         }
       } else {
-        console.log('⚠️ Ses dosyası yüklenmemiş, yeniden yükleniyor...');
+        console.log('⚠️ Sound file not loaded, reloading...');
         await loadSound();
         
-        // Yeniden dene
+        // Try again
         if (sound.current) {
           try {
             await sound.current.setVolumeAsync(getVolumeForIntensity(intensity));
             await sound.current.playAsync();
-            console.log('✅ Yeniden yüklenen ses dosyası çalıyor!');
+            console.log('✅ Reloaded sound file playing!');
             
-            // Vibrasyon da başlat
+            // Start vibration too
             const vibrationPattern = [1000, 300, 1000, 300];
             Vibration.vibrate(vibrationPattern, true);
             
             return true;
           } catch (reloadError) {
-            console.log('Yeniden yükleme hatası:', reloadError);
+            console.log('Reload error:', reloadError);
           }
         }
       }
       
-      // Eğer assets ses dosyası yoksa veya çalmazsa, alternatif çözüm
-      console.log('Assets ses dosyası bulunamadı, alternatif ses deneniyor...');
+      // If assets sound file doesn't exist or can't play, alternative solution
+      console.log('Assets sound file not found, trying alternative sound...');
       
-      // Vibrasyon başlat (su atma işlemi benzetimi)
+      // Start vibration (water ejection process simulation)
       const vibrationPattern = [1000, 500, 1000, 500, 1000, 500];
       Vibration.vibrate(vibrationPattern, true);
       
-      // Basit ton generator kullan
+      // Use simple tone generator
       await toneGenerator.startFrequencyCycle(
         frequency, 
         2000,
@@ -585,21 +635,21 @@ export default function App() {
         getVolumeForIntensity(intensity)
       );
       
-      console.log('🔊 Ton generator aktif!');
+      console.log('🔊 Tone generator active!');
       
       return true;
       
     } catch (error) {
-      console.log('Ses sistemi hatası:', error);
+      console.log('Sound system error:', error);
       
-      // Son çare: sadece vibrasyon
+      // Last resort: vibration only
       const vibrationPattern = [200, 100, 200, 100];
       Vibration.vibrate(vibrationPattern, true);
       
-      // 51 saniye sonra vibrasyonu durdur
+      // Stop vibration after 51 seconds
       setTimeout(() => {
         Vibration.cancel();
-        console.log('Vibrasyon durduruldu');
+        console.log('Vibration stopped');
       }, 51000);
       
       return true;
@@ -628,7 +678,7 @@ export default function App() {
     stopWaveAnimations();
     stopButtonAnimation();
     
-    console.log('✅ Su atma işlemi durduruldu - ses ve vibrasyon kesildi');
+    console.log('✅ Water ejection process stopped - sound and vibration cut off');
   };
 
   const startConfettiAnimation = () => {
@@ -671,30 +721,30 @@ export default function App() {
   };
 
   const startDropAnimations = () => {
-    console.log('💧 Damla animasyonları başlatılıyor...', dropAnimations.length, 'damla var');
+    console.log('💧 Drop animations starting...', dropAnimations.length, 'drops available');
     
     dropAnimations.forEach((drop, index) => {
-      // Her damla için sabit Y pozisyonu (dikey sırayla)
-      const baseY = (height * 0.2) + (index * (height * 0.6) / dropAnimations.length); // Ekrana yayılmış dikey pozisyonlar
-      const initialDelay = index * 100; // Her damla 100ms arayla başlar
+      // Fixed Y position for each drop (vertically arranged)
+      const baseY = (height * 0.2) + (index * (height * 0.6) / dropAnimations.length); // Vertically spread positions on screen
+      const initialDelay = index * 100; // Each drop starts 100ms apart
       
-      console.log(`Damla ${index}: Base Y=${baseY.toFixed(0)}, Delay=${initialDelay}ms`);
+      console.log(`Drop ${index}: Base Y=${baseY.toFixed(0)}, Delay=${initialDelay}ms`);
       
-      // Başlangıç değerleri
+      // Initial values
       drop.x.setValue(-50);
       drop.y.setValue(baseY);
       drop.opacity.setValue(0);
       
-      // Yukarı aşağı sallanma için değer
+      // Value for up-down swaying
       const verticalSwayValue = new Animated.Value(0);
       drop.verticalSway = verticalSwayValue;
       
-      // Yatay sallanma için değer  
+      // Value for horizontal swaying  
       const horizontalSwayValue = new Animated.Value(0);
       drop.horizontalSway = horizontalSwayValue;
       
-      // Boyut değeri
-      const scaleValue = new Animated.Value(0.6 + Math.random() * 0.6); // 0.6-1.2 arası
+      // Size value
+      const scaleValue = new Animated.Value(0.6 + Math.random() * 0.6); // Between 0.6-1.2
       drop.scale = scaleValue;
       
       // Sürekli akan animasyon fonksiyonu
@@ -749,31 +799,31 @@ export default function App() {
             duration: 4000 + (Math.random() * 2000), // 4-6 saniye arası
             useNativeDriver: true,
           }).start(() => {
-            // Sağa ulaştığında tekrar başla (eğer hala oynuyorsa)
+            // Restart when reaching right (if still playing)
             if (isPlaying) {
               setTimeout(() => {
-                flowCycle(); // Tekrar başla
-              }, 200 + Math.random() * 300); // 200-500ms bekle
+                flowCycle(); // Restart
+              }, 200 + Math.random() * 300); // Wait 200-500ms
             }
           });
         };
         
-        // İlk akışı başlat
+        // Start first flow
         flowCycle();
       };
       
-      // Gecikmeli başlat
+      // Start with delay
       setTimeout(() => {
-        console.log(`💧 Damla ${index} başlatılıyor`);
+        console.log(`💧 Drop ${index} starting`);
         startContinuousFlow();
       }, initialDelay);
     });
 
-    // 51 saniye sonra tüm damlaları gizle
+    // Hide all drops after 51 seconds
     setTimeout(() => {
-      console.log('💧 51 saniye doldu, damlalar kayboluyor...');
+      console.log('💧 51 seconds completed, drops disappearing...');
       dropAnimations.forEach((drop, index) => {
-        // Tüm animasyonları durdur
+        // Stop all animations
         if (drop.verticalSway) {
           drop.verticalSway.stopAnimation();
         }
@@ -784,7 +834,7 @@ export default function App() {
           drop.scale.stopAnimation();
         }
         
-        // Hızlıca gizle
+        // Hide quickly
         setTimeout(() => {
           Animated.timing(drop.opacity, {
             toValue: 0,
@@ -859,30 +909,30 @@ export default function App() {
     }
   };
 
-  // Mikrofon izni kontrol et
+  // Check microphone permission
   const checkRecordingPermissions = async () => {
     try {
       const { status } = await Audio.requestPermissionsAsync();
       setHasRecordingPermission(status === 'granted');
     } catch (error) {
-      console.log('Mikrofon izni hatası:', error);
+      console.log('Microphone permission error:', error);
       setHasRecordingPermission(false);
     }
   };
 
-  // Ses kaydı başlat
+  // Start audio recording
   const startRecording = async () => {
     try {
       if (!hasRecordingPermission) {
         const { status } = await Audio.requestPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('İzin Gerekli', 'Mikrofon testi için ses kaydı iznine ihtiyacımız var.');
+          Alert.alert('Permission Required', 'We need audio recording permission for microphone testing.');
           return;
         }
         setHasRecordingPermission(true);
       }
 
-      // Ses kaydı ayarları
+      // Audio recording settings
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
@@ -955,14 +1005,14 @@ export default function App() {
         ])
       ).start();
 
-      console.log('🎤 Ses kaydı başlatıldı');
+      console.log('🎤 Audio recording started');
     } catch (error) {
-      console.log('Ses kaydı başlatma hatası:', error);
-      Alert.alert('Hata', 'Ses kaydı başlatılamadı. Lütfen tekrar deneyin.');
+      console.log('Audio recording start error:', error);
+      Alert.alert('Error', 'Audio recording could not be started. Please try again.');
     }
   };
 
-  // Ses kaydını durdur
+  // Stop audio recording
   const stopRecording = async () => {
     try {
       if (!recording) return;
@@ -974,28 +1024,28 @@ export default function App() {
       setRecordingDuration(0);
       setAudioLevel(0);
 
-      // Animasyonları durdur
+      // Stop animations
       recordingIndicatorAnimation.stopAnimation();
       recordingIndicatorAnimation.setValue(1);
       audioLevelAnimation.setValue(0);
 
       if (uri) {
-        // Kaydedilen sesi yükle
+        // Load recorded audio
         const { sound } = await Audio.Sound.createAsync(
           { uri },
           { shouldPlay: false }
         );
         setRecordedSound(sound);
-        console.log('✅ Ses kaydı tamamlandı ve yüklendi');
+        console.log('✅ Audio recording completed and loaded');
       }
 
       setRecording(null);
     } catch (error) {
-      console.log('Ses kaydı durdurma hatası:', error);
+      console.log('Audio recording stop error:', error);
     }
   };
 
-  // Kaydedilen sesi oynat
+  // Play recorded audio
   const playRecording = async () => {
     try {
       if (!recordedSound) return;
@@ -1009,7 +1059,7 @@ export default function App() {
         await recordedSound.replayAsync();
         setIsPlayingRecording(true);
         
-        // Oynatma bittiğinde durumu güncelle
+        // Update status when playback ends
         recordedSound.setOnPlaybackStatusUpdate((status) => {
           if (status.didJustFinish) {
             setIsPlayingRecording(false);
@@ -1017,11 +1067,11 @@ export default function App() {
         });
       }
     } catch (error) {
-      console.log('Ses oynatma hatası:', error);
+      console.log('Audio playback error:', error);
     }
   };
 
-  // Ses kaydını sil
+  // Clear audio recording
   const clearRecording = async () => {
     try {
       if (recordedSound) {
@@ -1029,21 +1079,21 @@ export default function App() {
         setRecordedSound(null);
       }
       setIsPlayingRecording(false);
-      console.log('🗑️ Ses kaydı silindi');
+      console.log('🗑️ Audio recording deleted');
     } catch (error) {
-      console.log('Ses kaydı silme hatası:', error);
+      console.log('Audio recording deletion error:', error);
     }
   };
 
-  // Mikrofon testi simülasyonu başlat
+  // Start microphone test simulation
   const startMicrophoneTest = () => {
-    console.log('🎤 startMicrophoneTest fonksiyonu çağrıldı');
+    console.log('🎤 startMicrophoneTest function called');
     setIsTesting(true);
     setTestPhase('testing');
     setTestDuration(0);
     setSimulatedAudioLevel(0);
     setMicQuality(0);
-    console.log('🎤 State değerleri ayarlandı, animasyon başlatılıyor');
+    console.log('🎤 State values set, starting animation');
 
     // Test animasyonu başlat
     Animated.loop(
@@ -1061,45 +1111,45 @@ export default function App() {
       ])
     ).start();
 
-    console.log('🎤 Timer başlatılıyor...');
+    console.log('🎤 Timer starting...');
     
-    // Simülasyon timer
+    // Simulation timer
     const testTimer = setInterval(() => {
       setTestDuration(prev => {
         const newDuration = prev + 1;
-        console.log('🎤 Test süresi:', newDuration, 'saniye');
+        console.log('🎤 Test duration:', newDuration, 'seconds');
         
-        // Simülasyon ses seviyesi - daha dinamik dalgalanma
-        const baseLevel = 40 + Math.sin(newDuration * 0.5) * 20; // Sinüs dalgası
-        const randomVariation = Math.random() * 30; // Rastgele varyasyon
+        // Simulated audio level - more dynamic fluctuation
+        const baseLevel = 40 + Math.sin(newDuration * 0.5) * 20; // Sine wave
+        const randomVariation = Math.random() * 30; // Random variation
         const finalLevel = Math.max(10, Math.min(95, baseLevel + randomVariation));
         setSimulatedAudioLevel(finalLevel);
         
-        // Kalite skoru hesapla
-        const qualityScore = Math.min(newDuration * 8, 95); // Her saniye %8 artış, max %95
+        // Calculate quality score
+        const qualityScore = Math.min(newDuration * 8, 95); // +8% per second, max 95%
         setMicQuality(qualityScore);
         
-        // Kalite animasyonu
+        // Quality animation
         Animated.timing(qualityAnimation, {
           toValue: qualityScore / 100,
           duration: 500,
           useNativeDriver: true,
         }).start();
 
-        // 10 saniye sonra test tamamla
+        // Complete test after 10 seconds
         if (newDuration >= 10) {
-          console.log('🎤 Test tamamlanıyor...');
+          console.log('🎤 Test completing...');
           clearInterval(testTimer);
           setIsTesting(false);
           setTestPhase('completed');
           micTestAnimation.stopAnimation();
           setSimulatedAudioLevel(0);
           
-          // Final kalite skoru
-          const finalScore = 85 + Math.random() * 10; // 85-95 arası
+          // Final quality score
+          const finalScore = 85 + Math.random() * 10; // Between 85-95
           setMicQuality(Math.round(finalScore));
           
-          console.log('🎤 Mikrofon testi tamamlandı:', Math.round(finalScore), '%');
+          console.log('🎤 Microphone test completed:', Math.round(finalScore), '%');
         }
         
         return newDuration;
@@ -1107,7 +1157,7 @@ export default function App() {
     }, 1000);
   };
 
-  // Test sıfırla
+  // Reset test
   const resetTest = () => {
     setTestPhase('ready');
     setIsTesting(false);
@@ -1119,7 +1169,7 @@ export default function App() {
     micTestAnimation.stopAnimation();
   };
 
-  // Hoparlör test fonksiyonları
+  // Speaker test functions
   const startStereoTest = async () => {
     try {
       if (isStereoTesting) {
@@ -1127,29 +1177,44 @@ export default function App() {
         return;
       }
 
+      // Audio mode'u basit şekilde ayarla
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+        staysActiveInBackground: false,
+      });
+
       setIsStereoTesting(true);
       setCurrentTestSide('both');
       setTestProgress(0);
       startSpeakerAnimations();
 
-      // Eğer her iki hoparlör de kapalıysa test başlatma
+      // If both speakers are off, do not start test
       if (!leftSpeakerActive && !rightSpeakerActive) {
-        Alert.alert('Uyarı', 'Lütfen en az bir hoparlörü aktif edin.');
+        Alert.alert('Warning', 'Please activate at least one speaker.');
         setIsStereoTesting(false);
         return;
       }
 
-      // Stereo test sesini çal
+      // Play stereo test sound
       if (stereoTestSound.current) {
-        await stereoTestSound.current.setPositionAsync(0);
-        await stereoTestSound.current.playAsync();
+        try {
+          await stereoTestSound.current.setPositionAsync(0);
+          await stereoTestSound.current.playAsync();
+          console.log('✅ Stereo test sound started successfully');
+        } catch (playError) {
+          console.log('Stereo test sound play error:', playError);
+          Alert.alert('Warning', 'Stereo test sound could not be played. Please try again.');
+        }
       } else {
-        console.log('Stereo test sesi yüklenemedi');
-        Alert.alert('Uyarı', 'Stereo test sesi yüklenemedi. Lütfen uygulamayı yeniden başlatın.');
+        console.log('Stereo test sound could not be loaded');
+        Alert.alert('Warning', 'Stereo test sound could not be loaded. Please restart the app.');
       }
     } catch (error) {
-      console.log('Stereo test başlatma hatası:', error);
-      Alert.alert('Hata', 'Stereo test başlatılırken bir hata oluştu.');
+      console.log('Stereo test start error:', error);
+      Alert.alert('Error', 'An error occurred while starting the stereo test.');
     }
   };
 
@@ -1201,6 +1266,15 @@ export default function App() {
 
   const playTestSound = async () => {
     try {
+      // Audio mode'u basit şekilde ayarla
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+        staysActiveInBackground: false,
+      });
+      
       // Önce assets'teki stereo test sesini dene
       if (stereoTestSound.current) {
         console.log('🔊 Stereo test sesi çalınıyor...');
@@ -1296,10 +1370,8 @@ export default function App() {
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
-        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
         playsInSilentModeIOS: true,
         shouldDuckAndroid: true,
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
         playThroughEarpieceAndroid: false,
         staysActiveInBackground: false,
       });
@@ -1482,23 +1554,23 @@ export default function App() {
           >
             <View style={styles.modalHeader}>
               <Ionicons name="water" size={60} color="white" />
-              <Text style={styles.modalTitle}>Su Atma Başlatılıyor</Text>
+              <Text style={styles.modalTitle}>Starting Water Ejection</Text>
             </View>
             
             <View style={styles.modalContent}>
               <View style={styles.warningItem}>
                 <Text style={styles.warningIcon}>📱</Text>
-                <Text style={styles.warningText}>Telefonu hoparlör aşağıya gelecek şekilde tutun</Text>
+                <Text style={styles.warningText}>Hold the phone with speaker facing down</Text>
               </View>
               
               <View style={styles.warningItem}>
                 <Text style={styles.warningIcon}>🔊</Text>
-                <Text style={styles.warningText}>Ses seviyesini maksimuma çıkarın</Text>
+                <Text style={styles.warningText}>Turn volume to maximum</Text>
               </View>
 
               <View style={styles.warningItem}>
                 <Text style={styles.warningIcon}>🔔</Text>
-                <Text style={styles.warningText}>Telefonunuzu sessizden çıkarın</Text>
+                <Text style={styles.warningText}>Turn off silent mode</Text>
               </View>
             </View>
             
@@ -1507,7 +1579,7 @@ export default function App() {
               onPress={handleStartWaterProcess}
               activeOpacity={0.8}
             >
-              <Text style={styles.continueButtonText}>Devam Et</Text>
+              <Text style={styles.continueButtonText}>Continue</Text>
             </TouchableOpacity>
           </LinearGradient>
         </View>
@@ -1526,7 +1598,7 @@ export default function App() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Clear Wave</Text>
-          <Text style={styles.subtitle}>Profesyonel Su Atma Sistemi</Text>
+          <Text style={styles.subtitle}>Professional Water Ejection System</Text>
           
           {/* Premium İkonu */}
           <TouchableOpacity
@@ -1583,15 +1655,15 @@ export default function App() {
         {/* Teknolojik Bilgi Kartları - Sadece 2 Adet */}
         <View style={styles.infoCards}>
           <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>Hedefli Temizlik</Text>
-            <Text style={styles.infoCardText}>165-2000 Hz frekans aralığında hoparlör temizliği</Text>
-            <Text style={styles.infoCardTech}>• Ultra-sonic teknoloji</Text>
+            <Text style={styles.infoCardTitle}>Targeted Cleaning</Text>
+            <Text style={styles.infoCardText}>Speaker cleaning in 165-2000 Hz frequency range</Text>
+            <Text style={styles.infoCardTech}>• Ultra-sonic technology</Text>
           </View>
           
           <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>Apple Teknolojisi</Text>
-            <Text style={styles.infoCardText}>Apple Watch ile aynı 165 Hz temel frekans sistemi</Text>
-            <Text style={styles.infoCardTech}>• 51 saniyelik optimum süreç</Text>
+            <Text style={styles.infoCardTitle}>Apple Technology</Text>
+            <Text style={styles.infoCardText}>Same 165 Hz base frequency system as Apple Watch</Text>
+            <Text style={styles.infoCardTech}>• 51-second optimal process</Text>
           </View>
         </View>
 
@@ -1612,7 +1684,7 @@ export default function App() {
             }}
           >
             <Text style={[styles.navIcon, currentScreen === 'main' && styles.activeNavIcon]}>🏠</Text>
-            <Text style={[styles.navText, currentScreen === 'main' && styles.activeNavText]}>Ana Sayfa</Text>
+            <Text style={[styles.navText, currentScreen === 'main' && styles.activeNavText]}>Home</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1620,7 +1692,7 @@ export default function App() {
             onPress={() => setCurrentScreen('mic-test')}
           >
             <Text style={[styles.navIcon, currentScreen === 'mic-test' && styles.activeNavIcon]}>🎤</Text>
-            <Text style={[styles.navText, currentScreen === 'mic-test' && styles.activeNavText]}>Mikrofon</Text>
+            <Text style={[styles.navText, currentScreen === 'mic-test' && styles.activeNavText]}>Microphone</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1628,7 +1700,7 @@ export default function App() {
             onPress={() => setCurrentScreen('speaker-test')}
           >
             <Text style={[styles.navIcon, currentScreen === 'speaker-test' && styles.activeNavIcon]}>🔊</Text>
-            <Text style={[styles.navText, currentScreen === 'speaker-test' && styles.activeNavText]}>Hoparlör</Text>
+            <Text style={[styles.navText, currentScreen === 'speaker-test' && styles.activeNavText]}>Speaker</Text>
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -1654,14 +1726,14 @@ export default function App() {
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color="white" />
-          <Text style={styles.backButtonText}>Geri</Text>
+          <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
         
         {/* Başlık */}
         <View style={styles.processHeader}>
-          <Text style={styles.processTitle}>SU ATMA İŞLEMİ</Text>
+          <Text style={styles.processTitle}>WATER EJECTION PROCESS</Text>
           <Text style={styles.processSubtitle}>
-            {isCompleted ? 'İşlem tamamlandı!' : 'İşlem devam ediyor...'}
+            {isCompleted ? 'Process completed!' : 'Process in progress...'}
           </Text>
         </View>
 
@@ -1753,12 +1825,12 @@ export default function App() {
               {isCompleted ? (
                 <>
                   <Ionicons name="checkmark" size={60} color="white" />
-                  <Text style={styles.completedLabel}>TAMAMLANDI</Text>
+                  <Text style={styles.completedLabel}>COMPLETED</Text>
                 </>
               ) : (
                 <>
                   <Text style={styles.progressPercentage}>{Math.round(progress * 100)}%</Text>
-                  <Text style={styles.progressLabel}>TAMAMLANDI</Text>
+                  <Text style={styles.progressLabel}>COMPLETED</Text>
                 </>
               )}
             </View>
@@ -1769,7 +1841,7 @@ export default function App() {
               <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
             </View>
             <Text style={styles.techProgressText}>
-              {isCompleted ? '✅ SÜREÇ TAMAMLANDI' : progress >= 1 ? '✅ İŞLEM TAMAMLANDI' : isPlaying ? 'İŞLEM SÜRÜYOR...' : 'HAZIR'}
+              {isCompleted ? '✅ PROCESS COMPLETED' : progress >= 1 ? '✅ OPERATION COMPLETED' : isPlaying ? 'OPERATION IN PROGRESS...' : 'READY'}
             </Text>
           </View>
         </View>
@@ -1777,10 +1849,10 @@ export default function App() {
         {/* Bilgi */}
         <View style={styles.processInfo}>
           <Text style={styles.processInfoText}>
-            {isCompleted ? '🎉 İşlem başarıyla tamamlandı!' : isPlaying ? '🔊 Yüksek frekanslı ses çıkıyor' : '⏳ İşlem başlatılmayı bekliyor'}
+            {isCompleted ? '🎉 Process completed successfully!' : isPlaying ? '🔊 High frequency sound is playing' : '⏳ Waiting to start process'}
           </Text>
           <Text style={styles.processInfoText}>
-            {isCompleted ? '🏠 Ana sayfaya yönlendiriliyorsunuz...' : '💧 Su damlacıkları hoparlörden atılıyor'}
+            {isCompleted ? '🏠 Redirecting to home page...' : '💧 Water droplets are being ejected from speaker'}
           </Text>
         </View>
       </LinearGradient>
@@ -1798,10 +1870,10 @@ export default function App() {
         <View style={styles.micTestContainer}>
           {/* Başlık - Emoji olmadan */}
           <View style={styles.micTestHeader}>
-            <Text style={styles.testPageTitle}>MİKROFON TESTİ</Text>
+            <Text style={styles.testPageTitle}>MICROPHONE TEST</Text>
             <Text style={styles.testPageSubtitle}>
-              {testPhase === 'ready' ? 'Profesyonel Mikrofon Analiz Sistemi' : 
-               testPhase === 'testing' ? 'Test Sürüyor...' : 'Test Tamamlandı'}
+              {testPhase === 'ready' ? 'Professional Microphone Analysis System' : 
+               testPhase === 'testing' ? 'Test in Progress...' : 'Test Completed'}
             </Text>
           </View>
 
@@ -1869,7 +1941,7 @@ export default function App() {
                   </View>
                 </View>
                 <Text style={styles.qualityDescription}>
-                  • Mikrofon performansı ve ses kalitesi analizi
+                  • Microphone performance and audio quality analysis
                 </Text>
               </View>
             </View>
@@ -1894,8 +1966,8 @@ export default function App() {
               activeOpacity={0.8}
             >
               <Text style={styles.micTestButtonText}>
-                {testPhase === 'ready' ? 'BAŞLAT' : 
-                 testPhase === 'testing' ? 'TEST SÜRÜYOR' : 'YENİDEN TEST'}
+                {testPhase === 'ready' ? 'START' : 
+                 testPhase === 'testing' ? 'TEST IN PROGRESS' : 'RETEST'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1913,7 +1985,7 @@ export default function App() {
             }}
           >
             <Text style={[styles.navIcon, currentScreen === 'main' && styles.activeNavIcon]}>🏠</Text>
-            <Text style={[styles.navText, currentScreen === 'main' && styles.activeNavText]}>Ana Sayfa</Text>
+            <Text style={[styles.navText, currentScreen === 'main' && styles.activeNavText]}>Home</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1921,7 +1993,7 @@ export default function App() {
             onPress={() => setCurrentScreen('mic-test')}
           >
             <Text style={[styles.navIcon, currentScreen === 'mic-test' && styles.activeNavIcon]}>🎤</Text>
-            <Text style={[styles.navText, currentScreen === 'mic-test' && styles.activeNavText]}>Mikrofon</Text>
+            <Text style={[styles.navText, currentScreen === 'mic-test' && styles.activeNavText]}>Microphone</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1929,7 +2001,7 @@ export default function App() {
             onPress={() => setCurrentScreen('speaker-test')}
           >
             <Text style={[styles.navIcon, currentScreen === 'speaker-test' && styles.activeNavIcon]}>🔊</Text>
-            <Text style={[styles.navText, currentScreen === 'speaker-test' && styles.activeNavText]}>Hoparlör</Text>
+            <Text style={[styles.navText, currentScreen === 'speaker-test' && styles.activeNavText]}>Speaker</Text>
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -1946,9 +2018,9 @@ export default function App() {
       >
         {/* Header */}
         <View style={styles.speakerTestHeader}>
-          <Text style={styles.testPageTitle}>HOPARLÖR TESTİ</Text>
+          <Text style={styles.testPageTitle}>SPEAKER TEST</Text>
           <Text style={styles.testPageSubtitle}>
-            Stereo Ses Sistemi Analizi
+            Stereo Sound System Analysis
           </Text>
         </View>
 
@@ -2020,7 +2092,7 @@ export default function App() {
               </View>
             </TouchableOpacity>
             
-            <Text style={styles.speakerLabel}>Sol Kanal</Text>
+            <Text style={styles.speakerLabel}>Left Channel</Text>
           </View>
 
           {/* Sağ Hoparlör */}
@@ -2089,7 +2161,7 @@ export default function App() {
               </View>
             </TouchableOpacity>
             
-            <Text style={styles.speakerLabel}>Sağ Kanal</Text>
+            <Text style={styles.speakerLabel}>Right Channel</Text>
           </View>
         </View>
 
@@ -2097,7 +2169,7 @@ export default function App() {
         <View style={styles.autoTuneSection}>
           <Text style={styles.autoTuneTitle}>Auto Tune</Text>
           <Text style={styles.autoTuneDescription}>
-            Sol, sağ ve çift kanal sıralı testi
+            Sequential test of left, right and dual channels
           </Text>
           <TouchableOpacity 
             style={[styles.autoTuneSwitch, autoTuneEnabled && styles.autoTuneSwitchActive]}
@@ -2116,7 +2188,7 @@ export default function App() {
             activeOpacity={0.9}
           >
             <Text style={styles.micTestButtonText}>
-              {isStereoTesting ? 'Durdur' : 'Başlat'}
+              {isStereoTesting ? 'Stop' : 'Start'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -2134,7 +2206,7 @@ export default function App() {
             }}
           >
             <Text style={[styles.navIcon, currentScreen === 'main' && styles.activeNavIcon]}>🏠</Text>
-            <Text style={[styles.navText, currentScreen === 'main' && styles.activeNavText]}>Ana Sayfa</Text>
+            <Text style={[styles.navText, currentScreen === 'main' && styles.activeNavText]}>Home</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -2148,7 +2220,7 @@ export default function App() {
             }}
           >
             <Text style={[styles.navIcon, currentScreen === 'mic-test' && styles.activeNavIcon]}>🎤</Text>
-            <Text style={[styles.navText, currentScreen === 'mic-test' && styles.activeNavText]}>Mikrofon</Text>
+            <Text style={[styles.navText, currentScreen === 'mic-test' && styles.activeNavText]}>Microphone</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -2156,7 +2228,7 @@ export default function App() {
             onPress={() => setCurrentScreen('speaker-test')}
           >
             <Text style={[styles.navIcon, currentScreen === 'speaker-test' && styles.activeNavIcon]}>🔊</Text>
-            <Text style={[styles.navText, currentScreen === 'speaker-test' && styles.activeNavText]}>Hoparlör</Text>
+            <Text style={[styles.navText, currentScreen === 'speaker-test' && styles.activeNavText]}>Speaker</Text>
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -2213,7 +2285,7 @@ export default function App() {
             {/* Premium Modal */}
             <Modal
               visible={showPremiumModal}
-              animationType="slide"
+              animationType="fade"
               transparent={true}
               onRequestClose={() => setShowPremiumModal(false)}
             >
@@ -2226,7 +2298,7 @@ export default function App() {
                   if (currentScreen === 'water-process') {
                     setTimeout(() => {
                       startEjection();
-                    }, 800);
+                    }, 300);
                   }
                 }} 
                 onCancel={() => {
@@ -2853,12 +2925,10 @@ const styles = StyleSheet.create({
   },
   
   testButtonContainer: {
-    width: '70%',
+    width: '100%',
     alignItems: 'center',
     position: 'absolute',
     bottom: 100,
-    left: '15%',
-    right: '15%',
     paddingBottom: 20,
     justifyContent: 'center',
   },

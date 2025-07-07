@@ -1,17 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, Dimensions, ScrollView, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, Dimensions, ScrollView, Animated, ActivityIndicator, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { adapty } from 'react-native-adapty';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
+
+// Sabit ürün ID'leri - App Store Connect'te tanımlanan ID'ler
+const WEEKLY_PRODUCT_ID = '01_rc_499_1w_3d0';
+const YEARLY_PRODUCT_ID = '01_rc_2499_1y';
+
+// Placement ID - Adapty Dashboard'da tanımlanan
+const PLACEMENT_ID = '01_default';
 
 const PaymentScreen = ({ onContinue, onCancel }) => {
   const [freeTrial, setFreeTrial] = useState(true);
-  const [closeVisible, setCloseVisible] = useState(false); // X butonunu başlangıçta gizle
+  const [closeVisible, setCloseVisible] = useState(false);
   const slideAnimation = useRef(new Animated.Value(0)).current;
   const opacityAnimation = useRef(new Animated.Value(0)).current;
   const buttonAnimation = useRef(new Animated.Value(0)).current;
-  const closeOpacity = useRef(new Animated.Value(0)).current; // Başlangıçta şeffaf
+  const closeOpacity = useRef(new Animated.Value(0)).current;
+  const [isWeekly, setIsWeekly] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [paywallProducts, setPaywallProducts] = useState([]);
+  const [paywallError, setPaywallError] = useState(null);
 
   useEffect(() => {
     // Animasyonları başlat
@@ -44,32 +56,248 @@ const PaymentScreen = ({ onContinue, onCancel }) => {
       }).start();
     }, 5000);
     
+    // Paywall verilerini yükle
+    loadPaywallProducts();
+    
     return () => clearTimeout(timer);
   }, []);
 
+  const loadPaywallProducts = async () => {
+    try {
+      console.log('Paywall verileri yükleniyor...');
+      
+      // Adapty profilini kontrol et
+      const profile = await adapty.getProfile();
+      console.log('Adapty Profil:', {
+        profileId: profile.profileId,
+        accessLevels: Object.keys(profile.accessLevels || {}),
+        subscriptions: Object.keys(profile.subscriptions || {})
+      });
+
+      // Paywall'u yükle
+      const paywall = await adapty.getPaywall(PLACEMENT_ID);
+      if (!paywall) {
+        throw new Error('Paywall bulunamadı');
+      }
+
+      // Paywall ürünlerini yükle
+      const products = await adapty.getPaywallProducts(paywall);
+      console.log('Paywall ürünleri:', products?.map(p => ({
+        vendorId: p.vendorProductId,
+        price: p.price,
+        localizedPrice: p.localizedPrice
+      })));
+
+      if (!products?.length) {
+        throw new Error('Paywall ürünleri bulunamadı');
+      }
+
+      // Ürünleri filtrele
+      const validProducts = products.filter(p => 
+        p.vendorProductId === WEEKLY_PRODUCT_ID || 
+        p.vendorProductId === YEARLY_PRODUCT_ID
+      );
+
+      if (!validProducts.length) {
+        throw new Error('Geçerli ürün bulunamadı');
+      }
+
+      setPaywallProducts(validProducts);
+      setPaywallError(null);
+      
+    } catch (error) {
+      console.error('Paywall yükleme hatası:', {
+        message: error.message,
+        code: error.code
+      });
+      
+      setPaywallError(error.message);
+      Alert.alert(
+        'Paywall Hatası',
+        'Ürün bilgileri yüklenemedi. Lütfen şunları kontrol edin:\n\n' +
+        '1. App Store Connect\'te ürün ID\'leri doğru mu?\n' +
+        `• Haftalık: ${WEEKLY_PRODUCT_ID}\n` +
+        `• Yıllık: ${YEARLY_PRODUCT_ID}\n\n` +
+        '2. Adapty Dashboard\'da:\n' +
+        `• Placement ID: ${PLACEMENT_ID}\n` +
+        '• Ürünler App Store Connect ile eşleşiyor mu?\n\n' +
+        '3. Sandbox test kullanıcısı ile giriş yapıldı mı?',
+        [{ text: 'Tamam' }]
+      );
+    }
+  };
+
+  const getProductId = () => {
+    // Önce paywall ürünlerinden bul
+    if (paywallProducts.length > 0) {
+      const product = paywallProducts.find(p => 
+        p.vendorProductId === (isWeekly ? WEEKLY_PRODUCT_ID : YEARLY_PRODUCT_ID)
+      );
+      if (product?.vendorProductId) {
+        return product.vendorProductId;
+      }
+    }
+    // Fallback olarak sabit ID'yi kullan
+    return isWeekly ? WEEKLY_PRODUCT_ID : YEARLY_PRODUCT_ID;
+  };
+
+  const handlePurchase = async () => {
+    try {
+      setLoading(true);
+      
+      // Profil kontrolü
+      const profile = await adapty.getProfile();
+      console.log('Profil kontrolü:', {
+        profileId: profile.profileId,
+        connected: true
+      });
+      
+      const productId = getProductId();
+      console.log('Satın alma başlatıldı:', {
+        productId,
+        isWeekly,
+        freeTrial,
+        paywallProductsCount: paywallProducts.length
+      });
+      
+      // Paywall ürünlerini kontrol et
+      if (!paywallProducts.length) {
+        await loadPaywallProducts();
+      }
+      
+      // Ürün kontrolü
+      if (!productId) {
+        throw new Error('Ürün ID\'si bulunamadı');
+      }
+
+      // Doğru ürünü bul
+      const selectedProduct = paywallProducts.find(p => p.vendorProductId === productId);
+      if (!selectedProduct) {
+        throw new Error('Seçilen ürün bulunamadı');
+      }
+
+      console.log('Seçilen ürün:', {
+        id: selectedProduct.vendorProductId,
+        price: selectedProduct.price?.localizedString
+      });
+      
+      // Satın alma işlemi
+      const result = await adapty.makePurchase(selectedProduct);
+      
+      console.log('Satın alma sonucu:', result);
+      
+      if (!result?.accessLevels?.premium?.isActive) {
+        throw new Error('Premium aktivasyonu başarısız');
+      }
+      
+      Alert.alert('Başarılı', 'Premium aktif edildi!');
+      onContinue && onContinue();
+      
+    } catch (error) {
+      console.log('Satın alma hatası:', {
+        message: error.message,
+        code: error.code,
+        productId: getProductId()
+      });
+      
+      let errorMessage = 'Satın alma işlemi başarısız oldu.';
+      
+      if (error.message.includes('encodingFailed')) {
+        errorMessage = 'Ürün bilgileri yüklenemedi. Lütfen daha sonra tekrar deneyin.';
+      } else if (error.message.includes('badRequest')) {
+        errorMessage = 'Bağlantı hatası. İnternet bağlantınızı kontrol edin.';
+      } else if (error.message.includes('Seçilen ürün bulunamadı')) {
+        errorMessage = 'Seçilen paket bulunamadı. Lütfen farklı bir paket seçin.';
+      }
+      
+      Alert.alert('Hata', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestorePress = async () => {
+    try {
+      setLoading(true);
+      console.log('🔄 Satın alımlar geri yükleniyor...');
+      
+      const result = await adapty.restorePurchases();
+      
+      console.log('✅ Geri yükleme sonucu:', {
+        success: true,
+        accessLevel: result.accessLevel,
+        isActive: result.accessLevel?.isActive
+      });
+      
+      if (result.accessLevel?.isActive) {
+        Alert.alert('Başarılı', 'Satın alımlarınız geri yüklendi!');
+        onContinue && onContinue();
+      } else {
+        Alert.alert('Bilgi', 'Geri yüklenecek satın alım bulunamadı.');
+      }
+    } catch (e) {
+      console.error('❌ Geri yükleme hatası:', {
+        message: e.message,
+        code: e.code,
+        stack: e.stack
+      });
+      Alert.alert('Geri yükleme başarısız', e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const toggleFreeTrial = () => {
     setFreeTrial(!freeTrial);
+    setIsWeekly(true); // Free trial sadece haftalık pakette
   };
 
-  const handleTermsPress = () => {
-    // Terms of Use ekranına git
+  const handleDebugInfo = () => {
+    const debugInfo = 
+      `=== ADAPTY DEBUG BİLGİLERİ ===\n` +
+      `Bundle ID: com.clearwave.removewaterpro\n` +
+      `Adapty Public Key: public_live_I8BdB1bU.lrOqMamz477qZkP2bsJ3\n` +
+      `Placement ID: ${PLACEMENT_ID}\n` +
+      `Subscription Group: Wave Clear Premium\n\n` +
+      `=== PAYWALL DURUMU ===\n` +
+      `Paywall Ürün Sayısı: ${paywallProducts.length}\n` +
+      `Paywall Hatası: ${paywallError || 'Yok'}\n` +
+      `Mevcut Ürün ID: ${getProductId()}\n` +
+      `Haftalık Paket: ${isWeekly ? 'Evet' : 'Hayır'}\n` +
+      `Free Trial: ${freeTrial ? 'Evet' : 'Hayır'}\n\n` +
+      `=== ÜRÜN LİSTESİ ===\n` +
+      (paywallProducts.length > 0 ? 
+        paywallProducts.map(p => `• ${p.id} - ${p.localizedPrice} (${p.currencyCode})`).join('\n') :
+        'Hiç ürün yüklenmedi!\n\n=== FALLBACK ÜRÜNLER ===\n' +
+        `• ${WEEKLY_PRODUCT_ID} (Haftalık)\n` +
+        `• ${YEARLY_PRODUCT_ID} (Yıllık)`
+      ) +
+      `\n\n=== ÇÖZÜM ÖNERİLERİ ===\n` +
+      `1. App Store Connect'te ürün ID'lerini kontrol et\n` +
+      `2. Adapty Dashboard'da ürün ID'lerini güncellemesi\n` +
+      `3. Placement ID'nin eşleşmesi\n` +
+      `4. Sandbox test kullanıcısı kontrolü`;
+    
+    Alert.alert('Debug Bilgisi', debugInfo, [
+      { text: 'Kopyala', onPress: () => console.log('DEBUG INFO:\n', debugInfo) },
+      { text: 'Tamam' }
+    ]);
   };
 
-  const handleRestorePress = () => {
-    // Restore işlemi
-  };
-
-  const handlePrivacyPress = () => {
-    // Privacy Policy ekranına git
-  };
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0066CC" />
+        <Text style={styles.loadingText}>İşleniyor...</Text>
+      </View>
+    );
+  }
 
   return (
     <LinearGradient
       colors={['#001733', '#003166', '#001733']}
       style={styles.container}
     >
-      {/* Onboarding noktaları - kaldırıldı */}
-
       {/* X Butonu */}
       <Animated.View style={[styles.closeButtonContainer, { opacity: closeOpacity }]}>
         <TouchableOpacity 
@@ -145,7 +373,7 @@ const PaymentScreen = ({ onContinue, onCancel }) => {
               }
             ]}
           >
-            <TouchableOpacity style={styles.ctaButton} onPress={onContinue}>
+            <TouchableOpacity style={styles.ctaButton} onPress={handlePurchase}>
               <LinearGradient
                 colors={['#0066CC', '#0088FF']}
                 style={styles.ctaGradient}
@@ -170,13 +398,16 @@ const PaymentScreen = ({ onContinue, onCancel }) => {
       </ScrollView>
 
       <View style={styles.footerLinks}>
-        <TouchableOpacity onPress={handleTermsPress}>
+        <TouchableOpacity onPress={() => {}}>
           <Text style={styles.footerLink}>Terms of Use</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={handleRestorePress}>
           <Text style={styles.footerLink}>Restore</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handlePrivacyPress}>
+        <TouchableOpacity onPress={handleDebugInfo}>
+          <Text style={styles.footerLink}>Debug</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => {}}>
           <Text style={styles.footerLink}>Privacy Policy</Text>
         </TouchableOpacity>
       </View>
@@ -227,28 +458,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#777777',
-  },
-  dotsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    position: 'absolute',
-    top: 50,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    marginHorizontal: 5,
-  },
-  activeDot: {
-    backgroundColor: '#FFFFFF',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
   },
   contentContainer: {
     width: width * 0.9,
@@ -402,6 +611,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#CCDDFF',
     fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#001733',
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginTop: 20,
   },
 });
 

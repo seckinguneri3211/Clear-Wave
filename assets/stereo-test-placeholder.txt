@@ -1,18 +1,18 @@
-Stereo Test Ses Dosyası
+Stereo Test Sound File
 
-Bu dosyayı "stereo-test-sound.mp3" olarak değiştirin.
+Replace this file with "stereo-test-sound.mp3".
 
-Önerilen ses dosyası özellikleri:
+Recommended audio file specifications:
 - Format: MP3
 - Sample Rate: 44.1 kHz  
-- Channels: Stereo (2 kanal)
+- Channels: Stereo (2 channels)
 - Bit Rate: 128-320 kbps
-- Süre: 2-5 saniye
-- İçerik: Test tonu (440Hz) veya stereo test sinyali
+- Duration: 2-5 seconds
+- Content: Test tone (440Hz) or stereo test signal
 
-Test sesi örneği:
-- Sol kanal: 440Hz sinüs dalgası
-- Sağ kanal: 880Hz sinüs dalgası 
-- Veya mono 440Hz test tonu
+Test sound example:
+- Left channel: 440Hz sine wave
+- Right channel: 880Hz sine wave 
+- Or mono 440Hz test tone
 
-Ses dosyası yoksa uygulama otomatik olarak tone generator kullanacaktır. 
+The app will automatically use the tone generator if no sound file is present. 

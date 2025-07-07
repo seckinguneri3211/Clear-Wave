@@ -8,7 +8,7 @@ export class ToneGenerator {
 
   async generateTone(frequency = 165, duration = 30000, volume = 0.6) {
     try {
-      // React Native için basit bir beep sesi oluştur
+      // Create a simple beep sound for React Native
       const { sound } = await Audio.Sound.createAsync(
         { 
           uri: `data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmUeBDGH0fPTgjMGHZnX8tp7LQUjdcPF6eKRQAoUWazh666XVw==` 
@@ -21,11 +21,11 @@ export class ToneGenerator {
       // Volume ayarla
       await this.sound.setVolumeAsync(volume);
       
-      // Ses çal
+      // Play sound
       await this.sound.playAsync();
       this.isPlaying = true;
       
-      // Belirtilen süre sonra durdur
+      // Stop after specified duration
       if (duration > 0) {
         setTimeout(() => {
           this.stop();
@@ -36,10 +36,10 @@ export class ToneGenerator {
     } catch (error) {
       console.error('Tone generation error:', error);
       
-      // Fallback: Sistem sesi çal
+      // Fallback: Play system sound
       try {
         await Audio.Sound.createAsync(
-          require('expo/AppLoading'), // Sistem beep sesi
+          require('expo/AppLoading'), // System beep sound
           { shouldPlay: true, isLooping: false }
         );
       } catch (fallbackError) {
@@ -63,13 +63,13 @@ export class ToneGenerator {
     }
   }
 
-  // Frekans döngüsü (Apple Watch benzeri)
+      // Frequency cycle (similar to Apple Watch)
   async startFrequencyCycle(baseFreq = 165, highFreq = 2000, duration = 30000, volume = 0.6) {
     console.log('Starting frequency cycle with volume:', volume);
     
     const playTone = async (freq, dur) => {
       try {
-        // Basit beep tonları çal
+        // Play simple beep tones
         const { sound } = await Audio.Sound.createAsync(
           freq > 1000 
             ? { uri: 'https://www.soundjay.com/misc/sounds/beep-10.wav' }
@@ -92,7 +92,7 @@ export class ToneGenerator {
       }
     };
     
-    // Ana döngü başlat
+    // Start main loop
     const startTime = Date.now();
     const cycle = async () => {
       if (Date.now() - startTime < duration && this.isPlaying) {

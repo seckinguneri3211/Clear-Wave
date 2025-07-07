@@ -15,8 +15,11 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Mikrofon testi için ses kaydı yapmak amacıyla mikrofon erişimi gereklidir."
-      }
+        "NSMicrophoneUsageDescription": "Microphone access is required for audio recording to perform microphone testing.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDevelopmentRegion": "en"
+      },
+      "bundleIdentifier": "com.clearwave.removewaterpro"
     },
     "android": {
       "adaptiveIcon": {
@@ -25,19 +28,29 @@
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
-        "android.permission.RECORD_AUDIO"
-      ]
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "package": "com.clearwave.removewaterpro"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-dev-client",
       [
         "expo-av",
         {
-          "microphonePermission": "Mikrofon testi için ses kaydı yapmak amacıyla mikrofon erişimi gereklidir."
+          "microphonePermission": "Microphone access is required for audio recording to perform microphone testing."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "103e68ca-ebdf-44ec-8eaa-5607f1117569"
+      }
+    }
   }
 }
